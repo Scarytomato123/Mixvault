@@ -13,7 +13,13 @@ public partial class User
 
     public string? Password { get; set; }
 
+    public string? ProfilePictureUrl { get; set; }
+
     public DateTime? UserCreatedAt { get; set; }
+
+    public virtual ICollection<Playlist> Playlists { get; set; } = new List<Playlist>();
+
+    public virtual ICollection<Track> Tracks { get; set; } = new List<Track>();
 
     public virtual ICollection<Userlikesplaylist> Userlikesplaylists { get; set; } = new List<Userlikesplaylist>();
 
