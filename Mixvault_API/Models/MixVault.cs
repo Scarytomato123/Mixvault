@@ -30,7 +30,7 @@ public partial class MixVault : DbContext
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseMySql("server=localhost;database=Mixvault;user=root;password=1234", Microsoft.EntityFrameworkCore.ServerVersion.Parse("8.0.43-mysql"));
+        => optionsBuilder.UseMySql("server=localhost;database=MixVault;user=root;password=1234", Microsoft.EntityFrameworkCore.ServerVersion.Parse("8.0.43-mysql"));
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -44,12 +44,23 @@ public partial class MixVault : DbContext
 
             entity.ToTable("playlist");
 
+            entity.HasIndex(e => e.FkUser, "fkUser");
+
             entity.Property(e => e.PlaylistId).HasColumnName("PlaylistID");
+            entity.Property(e => e.FkUser).HasColumnName("fkUser");
+            entity.Property(e => e.PlaylistArtworkUrl)
+                .HasMaxLength(255)
+                .HasColumnName("PlaylistArtworkURL");
             entity.Property(e => e.PlaylistCreatedAt).HasColumnType("datetime");
             entity.Property(e => e.PlaylistDescription).HasColumnType("mediumtext");
             entity.Property(e => e.PlaylistGenre).HasColumnType("mediumtext");
             entity.Property(e => e.PlaylistName).HasColumnType("mediumtext");
             entity.Property(e => e.PlaylistTags).HasColumnType("mediumtext");
+
+            entity.HasOne(d => d.FkUserNavigation).WithMany(p => p.Playlists)
+                .HasForeignKey(d => d.FkUser)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("playlist_ibfk_1");
         });
 
         modelBuilder.Entity<Playlisthastrack>(entity =>
@@ -83,11 +94,25 @@ public partial class MixVault : DbContext
 
             entity.ToTable("track");
 
+            entity.HasIndex(e => e.FkUser, "fkUser");
+
             entity.Property(e => e.TrackId).HasColumnName("TrackID");
+            entity.Property(e => e.FkUser).HasColumnName("fkUser");
             entity.Property(e => e.Title).HasColumnType("mediumtext");
+            entity.Property(e => e.TrackArtworkUrl)
+                .HasMaxLength(255)
+                .HasColumnName("TrackArtworkURL");
+            entity.Property(e => e.TrackFileUrl)
+                .HasMaxLength(255)
+                .HasColumnName("TrackFileURL");
             entity.Property(e => e.TrackGenre).HasColumnType("mediumtext");
             entity.Property(e => e.TrackTags).HasColumnType("mediumtext");
             entity.Property(e => e.TrackUploadedAt).HasColumnType("datetime");
+
+            entity.HasOne(d => d.FkUserNavigation).WithMany(p => p.Tracks)
+                .HasForeignKey(d => d.FkUser)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("track_ibfk_1");
         });
 
         modelBuilder.Entity<User>(entity =>
@@ -100,6 +125,9 @@ public partial class MixVault : DbContext
             entity.Property(e => e.DisplayName).HasColumnType("mediumtext");
             entity.Property(e => e.Email).HasColumnType("mediumtext");
             entity.Property(e => e.Password).HasColumnType("mediumtext");
+            entity.Property(e => e.ProfilePictureUrl)
+                .HasMaxLength(255)
+                .HasColumnName("ProfilePictureURL");
             entity.Property(e => e.UserCreatedAt).HasColumnType("datetime");
         });
 

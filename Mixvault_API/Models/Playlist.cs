@@ -15,7 +15,13 @@ public partial class Playlist
 
     public string? PlaylistTags { get; set; }
 
+    public string? PlaylistArtworkUrl { get; set; }
+
     public DateTime? PlaylistCreatedAt { get; set; }
+
+    public int FkUser { get; set; }
+
+    public virtual User FkUserNavigation { get; set; } = null!;
 
     public virtual ICollection<Playlisthastrack> Playlisthastracks { get; set; } = new List<Playlisthastrack>();
 
