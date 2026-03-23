@@ -1,0 +1,174 @@
+﻿@page "/login"
+@inject HttpClient Http
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject HttpClient Http
+
+<style>
+    .login-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 80vh;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+
+    .login-card {
+        background: white;
+        padding: 40px;
+        border-radius: 20px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        width: 100%;
+        max-width: 400px;
+        border: 1px solid #f0f0f0;
+    }
+
+    .login-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .login-header h3 {
+        font-size: 24px;
+        font-weight: 800;
+        color: #1f2937;
+        margin-bottom: 10px;
+    }
+
+    .login-header p {
+        color: #6b7280;
+        font-size: 14px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 14px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 12px 16px;
+        border-radius: 10px;
+        border: 2px solid #e5e7eb;
+        transition: all 0.2s;
+        font-size: 16px;
+        box-sizing: border-box;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: #6366f1;
+        box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+    }
+
+    .btn-login {
+        width: 100%;
+        background: #6366f1;
+        color: white;
+        border: none;
+        padding: 14px;
+        border-radius: 10px;
+        font-size: 16px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background 0.3s;
+        margin-top: 10px;
+    }
+
+    .btn-login:hover {
+        background: #4f46e5;
+    }
+
+    .message {
+        padding: 12px;
+        border-radius: 8px;
+        margin-top: 20px;
+        font-size: 14px;
+        text-align: center;
+    }
+
+    .error { background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; }
+    .success { background: #ecfdf5; color: #059669; border: 1px solid #d1fae5; }
+</style>
+
+<div class="login-container">
+    <div class="login-card">
+        <div class="login-header">
+            <h3>Welkom terug!</h3>-
+        </div>
+
+        <div class="form-group">
+            <label for="username">Gebruikersnaam</label>
+            <input id="username" class="form-control" @bind="username" placeholder="" />
+        </div>
+
+        <div class="form-group">
+            <label for="password">Wachtwoord</label>
+            <input type="password" id="password" class="form-control" @bind="password" placeholder="" />
+        </div>
+
+        <button class="btn-login" @onclick="SubmitBucketListItem">Inloggen</button>
+
+        @if (ErrorMessage != null)
+        {
+            <div class="message error">⚠️ @ErrorMessage</div>
+        }
+
+        @if (SuccessMessage != null)
+        {
+            <div class="message success">✅ @SuccessMessage</div>
+        }
+    </div>
+</div>
+
+@code {
+    private string username { get; set; } = string.Empty;
+    private string password { get; set; } = string.Empty;
+    private string? ErrorMessage { get; set; }
+    private string? SuccessMessage { get; set; }
+    private async Task SubmitBucketListItem()
+    {
+        try
+        {
+            var url = $"/login?username={Uri.EscapeDataString(username)}&password={Uri.EscapeDataString(password)}";
+            var response = await Http.GetAsync(url);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var userData = await response.Content.ReadFromJsonAsync<UserResponse>();
+
+                if (userData != null)
+                {
+
+                    CentralUserState.UserId = userData.IdUser;
+                    CentralUserState.UserName = userData.NameUser;
+
+                    Navigation.NavigateTo($"/Mijn emmerlijst/{userData.IdUser}");
+                }
+            }
+            else
+            {
+                ErrorMessage = "Inloggen mislukt.";
+            }
+        }
+        catch (Exception ex) { ErrorMessage = "Et gaf nen error"; }
+    }
+
+    public class UserResponse
+    {
+        public int IdUser { get; set; }
+        public string NameUser { get; set; } = string.Empty;
+    }
+}
+    }
+}

@@ -1,7 +1,73 @@
 ﻿@page "/"
+@inject IHttpClientFactory HttpClientFactory
+@using System.Net.Http.Json
 
-<PageTitle>Home</PageTitle>
+<PageTitle>MixVault - Home</PageTitle>
 
-<h1>Hello, world!</h1>
+<div class="container mt-4">
+    <h1 class="mb-4">Ontdek Nieuwe Muziek 🎵</h1>
 
-Welcome to your new app.
+    @if (tracks == null)
+    {
+        <p><em>Nummers aan het laden... Zorg dat je API draait!</em></p>
+
+    }
+    else if (tracks.Count == 0)
+    {
+        <p>Er zijn nog geen nummers geüpload.</p>
+    }
+    else
+    {
+        <div class="row">
+            @foreach (var track in tracks)
+            {
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100 shadow-sm">
+                        <div class="card-body">
+                            <h5 class="card-title">@track.Title</h5>
+                            <h6 class="card-subtitle mb-2 text-muted">Door: @track.UploaderName</h6>
+                            <p class="card-text">
+                                <span class="badge bg-primary">@track.TrackGenre</span>
+                            </p>
+                            
+                            <button class="btn btn-outline-success btn-sm">▶ Afspelen</button>
+                            <button class="btn btn-outline-danger btn-sm">❤️ Like</button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    // Hier slaan we de lijst met nummers in op
+    private List<TrackModel>? tracks;
+
+    // Deze methode wordt automatisch uitgevoerd zodra de pagina laadt
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // We pakken de verbinding die je in Program.cs hebt klaargezet
+            var client = HttpClientFactory.CreateClient("MixVaultAPI");
+            
+            // We halen de data op en stoppen het direct in onze lijst
+            tracks = await client.GetFromJsonAsync<List<TrackModel>>("/tracks");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Fout bij het ophalen van nummers: {ex.Message}");
+        }
+    }
+
+    // Een simpele blauwdruk die precies overeenkomt met wat onze API terugstuurt
+    public class TrackModel
+    {
+        public int TrackId { get; set; }
+        public string? Title { get; set; }
+        public double? DurationMs { get; set; }
+        public string? TrackGenre { get; set; }
+        public string? UploaderName { get; set; }
+    }
+}
