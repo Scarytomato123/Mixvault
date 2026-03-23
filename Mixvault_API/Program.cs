@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Mixvault_API.Models;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -31,82 +32,133 @@ app.MapGet("/users", async (MixVault db) =>
     return Results.Ok(users);
 });
 
-//// GET: Alle bucket list items van een user (met executed status)
-//app.MapGet("/users/{userId}/bucketlist", async (int userId, MixVault db) =>
-//{
-//    var items = await db.Personalbucketlists
-//        .Where(pbl => pbl.FkUser == userId)
-//        .Include(pbl => pbl.FkBucketListItemNavigation)
-//        .Select(pbl => new
-//        {
-//            ItemId = pbl.FkBucketListItem,
-//            Name = pbl.FkBucketListItemNavigation.NameBucketListItem,
-//            Description = pbl.FkBucketListItemNavigation.DescriptionBucketListItem,
-//            Executed = pbl.Executed
-//        })
-//        .ToListAsync();
+// GET: Alle afspeellijsten (playlists) ophalen
+app.MapGet("/playlists", async (MixVault db) =>
+{
+    // We halen de afspeellijsten op uit de database
+    var playlists = await db.Playlists
+        .Select(p => new
+        {
+            p.PlaylistId,
+            p.PlaylistName,
+            p.PlaylistDescription,
+            p.PlaylistGenre,
+            p.PlaylistTags
+        })
+        .ToListAsync();
 
-//    return Results.Ok(items);
-//});
+    return Results.Ok(playlists);
+});
 
-//// POST: Voeg een item toe aan de bucket list van een user
-//app.MapPost("/users/{userId}/bucketlist/{itemId}", async (int userId, int itemId, MixVault db) =>
-//{
-//    // Check of item al bestaat voor deze user
-//    var exists = await db.Personalbucketlists
-//        .AnyAsync(pbl => pbl.FkUser == userId && pbl.FkBucketListItem == itemId);
+// GET: Alle nummers (tracks) ophalen
+app.MapGet("/tracks", async (MixVault db) =>
+{
+    var tracks = await db.Tracks
+        .Select(t => new
+        {
+            t.TrackId,
+            t.Title,
+            t.DurationMs,
+            t.TrackUploadedAt
+        })
+        .ToListAsync();
+    return Results.Ok(tracks);
+});
 
-//    if (exists)
-//        return Results.Conflict("Item already in bucket list");
+// GET: Alle nummers van een specifieke afspeellijst ophalen
+app.MapGet("/playlists/{id}/tracks", async (int id, MixVault db) =>
+{
+    // We zoeken in de koppeltabel 'PlaylistHasTracks' naar de juiste nummers
+    var tracksInPlaylist = await db.Playlisthastracks
+        .Where(pht => pht.FkPlaylist == id)
+        .Include(pht => pht.FkTrackNavigation) // Haal de gegevens van het nummer zelf op
+        .OrderBy(pht => pht.Position) // Sorteer ze op de juiste volgorde
+        .Select(pht => new
+        {
+            Position = pht.Position,
+            TrackId = pht.FkTrackNavigation.TrackId,
+            Title = pht.FkTrackNavigation.Title,
+            Duration = pht.FkTrackNavigation.DurationMs
+        })
+        .ToListAsync();
 
-//    var personalItem = new Personalbucketlist
-//    {
-//        FkUser = userId,
-//        FkBucketListItem = itemId,
-//        Executed = false
-//    };
+    return Results.Ok(tracksInPlaylist);
+});
 
-//    db.Personalbucketlists.Add(personalItem);
-//    await db.SaveChangesAsync();
+// POST: Een nummer liken
+app.MapPost("/users/{userId}/likes/tracks/{trackId}", async (int userId, int trackId, MixVault db) =>
+{
+    // Eerst controleren we of deze gebruiker dit nummer al geliket heeft om dubbele likes te voorkomen
+    var exists = await db.Userlikestracks.AnyAsync(ult => ult.FkUser == userId && ult.FkTrack == trackId);
+    if (exists) return Results.Conflict("Je hebt dit nummer al geliket.");
 
-//    return Results.Created($"/users/{userId}/bucketlist", personalItem);
-//});
+    // Maak de nieuwe like aan en sla hem op in de database
+    var newLike = new Userlikestrack { FkUser = userId, FkTrack = trackId };
+    db.Userlikestracks.Add(newLike);
+    await db.SaveChangesAsync();
 
-//// PUT: Markeer een item als executed/not executed
-//app.MapPut("/users/{userId}/bucketlist/{itemId}/toggle", async (int userId, int itemId, MixVault db) =>
-//{
-//    var item = await db.Personalbucketlists
-//        .FirstOrDefaultAsync(pbl => pbl.FkUser == userId && pbl.FkBucketListItem == itemId);
+    return Results.Ok("Nummer geliket!");
+});
 
-//    if (item == null)
-//        return Results.NotFound();
+// DELETE: Een like weghalen (un-liken)
+app.MapDelete("/users/{userId}/likes/tracks/{trackId}", async (int userId, int trackId, MixVault db) =>
+{
+    // Zoek de bestaande like op
+    var like = await db.Userlikestracks.FirstOrDefaultAsync(ult => ult.FkUser == userId && ult.FkTrack == trackId);
+    if (like == null) return Results.NotFound("Like niet gevonden.");
 
-//    item.Executed = !item.Executed; // Toggle
-//    await db.SaveChangesAsync();
+    // Verwijder de like uit de database
+    db.Userlikestracks.Remove(like);
+    await db.SaveChangesAsync();
 
-//    return Results.Ok(new { Executed = item.Executed });
-//});
+    return Results.Ok("Like verwijderd!");
+});
 
-//// DELETE: Verwijder een item uit de bucket list van een user
-//app.MapDelete("/users/{userId}/bucketlist/{itemId}", async (int userId, int itemId, MixVault db) =>
-//{
-//    var item = await db.Personalbucketlists
-//        .FirstOrDefaultAsync(pbl => pbl.FkUser == userId && pbl.FkBucketListItem == itemId);
+// POST: Een nieuw nummer uploaden (alleen de data, mp3 doen we later)
+app.MapPost("/tracks", async (Track newTrack, MixVault db) =>
+{
+    // We stellen automatisch de datum en tijd van uploaden in
+    newTrack.TrackUploadedAt = DateTime.Now;
 
-//    if (item == null)
-//        return Results.NotFound();
+    db.Tracks.Add(newTrack);
+    await db.SaveChangesAsync();
 
-//    db.Personalbucketlists.Remove(item);
-//    await db.SaveChangesAsync();
+    // We sturen een bericht terug dat het succesvol is, samen met de nieuwe TrackID
+    return Results.Created($"/tracks/{newTrack.TrackId}", newTrack);
+});
 
-//    return Results.NoContent();
-//});
+// POST: Een nieuwe afspeellijst maken
+app.MapPost("/playlists", async (Playlist newPlaylist, MixVault db) =>
+{
+    newPlaylist.PlaylistCreatedAt = DateTime.Now;
 
-//// GET: Alle beschikbare bucket list items
-//app.MapGet("/bucketlistitems", async (MixVault db) =>
-//{
-//    var items = await db.Personalbucketlists.ToListAsync();
-//    return Results.Ok(items);
-//});
+    db.Playlists.Add(newPlaylist);
+    await db.SaveChangesAsync();
+
+    return Results.Created($"/playlists/{newPlaylist.PlaylistId}", newPlaylist);
+});
+
+// POST: Een nummer toevoegen aan een specifieke afspeellijst
+app.MapPost("/playlists/{playlistId}/tracks/{trackId}", async (int playlistId, int trackId, MixVault db) =>
+{
+    // Trucje: we zoeken eerst op wat de hoogste 'Position' in de huidige afspeellijst is.
+    // Als de lijst nog leeg is, beginnen we op positie 0.
+    var currentMaxPosition = await db.Playlisthastracks
+        .Where(p => p.FkPlaylist == playlistId)
+        .MaxAsync(p => (int?)p.Position) ?? 0;
+
+    // Maak de koppeling aan en zet het nieuwe nummer achteraan (positie + 1)
+    var newEntry = new Playlisthastrack
+    {
+        FkPlaylist = playlistId,
+        FkTrack = trackId,
+        Position = currentMaxPosition + 1
+    };
+
+    db.Playlisthastracks.Add(newEntry);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new { Bericht = "Nummer toegevoegd!", Positie = newEntry.Position });
+});
 
 app.Run();
