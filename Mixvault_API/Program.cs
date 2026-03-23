@@ -65,6 +65,21 @@ app.MapGet("/tracks", async (MixVault db) =>
     return Results.Ok(tracks);
 });
 
+//GET: kijk als wachtwoord en username overeenkomen en link met id
+app.MapGet("/login", async (string username, string password, MixVault db) =>
+{
+    var user = await db.Users
+        .Where(u => u.DisplayName == username && u.Password == password)
+        .Select(u => new { IdUser = u.UserId, NameUser = u.DisplayName })
+        .FirstOrDefaultAsync();
+
+    if (user == null)
+        return Results.Unauthorized();
+
+    return Results.Ok(user);
+});
+
+
 // GET: Alle nummers van een specifieke afspeellijst ophalen
 app.MapGet("/playlists/{id}/tracks", async (int id, MixVault db) =>
 {

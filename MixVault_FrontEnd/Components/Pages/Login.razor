@@ -140,6 +140,7 @@
     {
         try
         {
+            //app.MapGet("/login", async (string username, string password, MixVault db) =>
             var url = $"/login?username={Uri.EscapeDataString(username)}&password={Uri.EscapeDataString(password)}";
             var response = await Http.GetAsync(url);
 
@@ -149,11 +150,7 @@
 
                 if (userData != null)
                 {
-
-                    CentralUserState.UserId = userData.IdUser;
-                    CentralUserState.UserName = userData.NameUser;
-
-                    Navigation.NavigateTo($"/Mijn emmerlijst/{userData.IdUser}");
+                    Navigation.NavigateTo($"/MixVault/{userData.IdUser}");
                 }
             }
             else
@@ -161,7 +158,13 @@
                 ErrorMessage = "Inloggen mislukt.";
             }
         }
-        catch (Exception ex) { ErrorMessage = "Et gaf nen error"; }
+        catch (Exception ex)
+        {
+            // Dit laat de echte fout zien in je interface
+            ErrorMessage = $"Fout: {ex.Message}";
+            // Dit laat de details zien in je Visual Studio Output/Console
+            Console.WriteLine(ex.ToString());
+        }
     }
 
     public class UserResponse
