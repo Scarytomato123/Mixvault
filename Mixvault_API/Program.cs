@@ -115,8 +115,38 @@ app.MapPost("/users/{userId}/likes/tracks/{trackId}", async (int userId, int tra
     return Results.Ok("Nummer geliket!");
 });
 
-// DELETE: Een like weghalen (un-liken)
+// DELETE: Een like van een nummer weghalen (un-liken)
 app.MapDelete("/users/{userId}/likes/tracks/{trackId}", async (int userId, int trackId, MixVault db) =>
+{
+    // Zoek de bestaande like op
+    var like = await db.Userlikestracks.FirstOrDefaultAsync(ult => ult.FkUser == userId && ult.FkTrack == trackId);
+    if (like == null) return Results.NotFound("Like niet gevonden.");
+
+    // Verwijder de like uit de database
+    db.Userlikestracks.Remove(like);
+    await db.SaveChangesAsync();
+
+    return Results.Ok("Like verwijderd!");
+});
+
+
+// POST: Een track liken
+app.MapPost("/users/{userId}/likes/playlist/{trackId}", async (int userId, int trackId, MixVault db) =>
+{
+    // Eerst controleren we of deze gebruiker dit nummer al geliket heeft om dubbele likes te voorkomen
+    var exists = await db.Userlikestracks.AnyAsync(ult => ult.FkUser == userId && ult.FkTrack == trackId);
+    if (exists) return Results.Conflict("Je hebt dit nummer al geliket.");
+
+    // Maak de nieuwe like aan en sla hem op in de database
+    var newLike = new Userlikestrack { FkUser = userId, FkTrack = trackId };
+    db.Userlikestracks.Add(newLike);
+    await db.SaveChangesAsync();
+
+    return Results.Ok("Nummer geliket!");
+});
+
+// DELETE: Een like van een track weghalen (un-liken)
+app.MapDelete("/users/{userId}/likes/playlist/{trackId}", async (int userId, int trackId, MixVault db) =>
 {
     // Zoek de bestaande like op
     var like = await db.Userlikestracks.FirstOrDefaultAsync(ult => ult.FkUser == userId && ult.FkTrack == trackId);
@@ -174,6 +204,41 @@ app.MapPost("/playlists/{playlistId}/tracks/{trackId}", async (int playlistId, i
     await db.SaveChangesAsync();
 
     return Results.Ok(new { Bericht = "Nummer toegevoegd!", Positie = newEntry.Position });
+});
+
+//GET; Alle gelikete nummers van een specifieke gebruiker ophalen
+app.MapGet("/users/{userId}/likes/tracks", async (int userId, MixVault db) =>
+{
+    var likedTracks = await db.Userlikestracks
+        .Where(ult => ult.FkUser == userId)
+        .Include(ult => ult.FkTrackNavigation) // Haal de gegevens van het nummer zelf op
+        .Select(ult => new
+        {
+            ult.FkTrackNavigation.TrackId,
+            ult.FkTrackNavigation.Title,
+            ult.FkTrackNavigation.DurationMs,
+            ult.FkTrackNavigation.TrackUploadedAt
+        })
+        .ToListAsync();
+    return Results.Ok(likedTracks);
+});
+
+//GET: Alle gelikte afspeellijsten van een specifieke gebruiker ophalen
+app.MapGet("/users/{userId}/likes/playlists", async (int userId, MixVault db) =>
+{
+    var likedPlaylists = await db.Userlikesplaylists
+        .Where(ulp => ulp.FkUser == userId)
+        .Include(ulp => ulp.FkPlaylistNavigation) // Haal de gegevens van de afspeellijst zelf op
+        .Select(ulp => new
+        {
+            ulp.FkPlaylistNavigation.PlaylistId,
+            ulp.FkPlaylistNavigation.PlaylistName,
+            ulp.FkPlaylistNavigation.PlaylistDescription,
+            ulp.FkPlaylistNavigation.PlaylistGenre,
+            ulp.FkPlaylistNavigation.PlaylistTags
+        })
+        .ToListAsync();
+    return Results.Ok(likedPlaylists);
 });
 
 app.Run();

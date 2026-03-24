@@ -1,4 +1,4 @@
-﻿@page "/"
+﻿@page "/MixVault/{userId:int}"
 @inject IHttpClientFactory HttpClientFactory
 @using System.Net.Http.Json
 
@@ -28,17 +28,17 @@
 </style>
 
 <div class="container-fluid mt-4 px-4">
-    <h1 class="mb-4">Ontdek Nieuwe Muziek</h1>
+    <h1 class="mb-4">Ontdek Nieuwe Muziek 🎵 (Gebruiker: @userId)</h1>
 
-    @* --- RIJ 1: NUMMERS --- *@
-    <h3 class="section-title">🎵nummers</h3>
+    @* --- RIJ 1: GELIKETE NUMMERS --- *@
+    <h3 class="section-title">❤️ Jouw Favorieten</h3>
     @if (tracks == null)
     {
         <p><em>Nummers laden...</em></p>
     }
     else if (tracks.Count == 0)
     {
-        <p>Geen nummers gevonden.</p>
+        <p>Geen gelikete nummers gevonden.</p>
     }
     else
     {
@@ -60,25 +60,25 @@
     }
 
     @* --- RIJ 2: PLAYLIST --- *@
-    <h3 class="section-title">📂 Playlists</h3>
-    @if (playlist == null)
+    <h3 class="section-title">📂 Jouw Playlist</h3>
+    @if (Playlist == null)
     {
-        <p><em>Playlists laden...</em></p>
+        <p><em>Playlist laden...</em></p>
     }
-    else if (playlist.Count == 0)
+    else if (Playlist.Count == 0)
     {
-        <p>Er zin nog geen playlists.</p>
+        <p>Je playlist is nog leeg.</p>
     }
     else
     {
         <div class="horizontal-scroll-wrapper">
-            @foreach (var item in playlist)
+            @foreach (var item in Playlist)
             {
                 <div class="card shadow-sm scroll-card border-info">
                     <div class="card-body">
-                        <h5 class="card-title text-truncate">@item.PlaylistName</h5>
-                        <h6 class="card-subtitle mb-2 text-muted">@item.PlaylistTags</h6>
-                        <span class="badge bg-info text-dark">@item.PlaylistGenre</span>
+                        <h5 class="card-title text-truncate">@item.Title</h5>
+                        <h6 class="card-subtitle mb-2 text-muted">@item.UploaderName</h6>
+                        <span class="badge bg-info text-dark">@item.TrackGenre</span>
                         <div class="mt-3">
                             <button class="btn btn-outline-info btn-sm w-100">▶ Afspelen</button>
                         </div>
@@ -90,40 +90,27 @@
 </div>
 
 @code {
-    // Hier slaan we de lijst met nummers in op
-    private List<TrackModel>? tracks;
-    private List<Playlistmodel>? playlist;
+    [Parameter] public int userId { get; set; }
 
-    // Deze methode wordt automatisch uitgevoerd zodra de pagina laadt
+    private List<TrackModel>? tracks;
+    private List<TrackModel>? Playlist;
+
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            // We pakken de verbinding die je in Program.cs hebt klaargezet
             var client = HttpClientFactory.CreateClient("MixVaultAPI");
 
-            // We halen de data op en stoppen het direct in onze lijst
-            //tracks = await client.GetFromJsonAsync<List<TrackModel>>("/tracks");
-            tracks = await client.GetFromJsonAsync<List<TrackModel>>("/tracks");
-
+            // Let op: Ik heb de variabele namen hieronder aangepast zodat ze in de juiste lijst komen!
+            tracks = await client.GetFromJsonAsync<List<TrackModel>>($"users/{userId}/likes/tracks");
+            Playlist = await client.GetFromJsonAsync<List<TrackModel>>($"users/{userId}/likes/playlists");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Fout bij het ophalen van nummers: {ex.Message}");
         }
-
-        try
-        {
-            var client = HttpClientFactory.CreateClient("MixVaultAPI");
-            playlist = await client.GetFromJsonAsync<List<Playlistmodel>>("/playlists");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Fout bij het ophalen van de playlists: {ex.Message}");
-        }
     }
 
-    // Een simpele blauwdruk die precies overeenkomt met wat onze API terugstuurt
     public class TrackModel
     {
         public int TrackId { get; set; }
@@ -131,14 +118,5 @@
         public double? DurationMs { get; set; }
         public string? TrackGenre { get; set; }
         public string? UploaderName { get; set; }
-    }
-
-    public class Playlistmodel
-    {
-		public int PlaylistId { get; set; }
-		public string? PlaylistName { get; set; }
-		public string? PlaylistDescription { get; set; }
-		public string? PlaylistGenre { get; set; }
-		public string? PlaylistTags { get; set; }
     }
 }
