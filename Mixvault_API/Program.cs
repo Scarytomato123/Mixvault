@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Mixvault_API.Models;
 
+
 var builder = WebApplication.CreateBuilder(args);
 
 var connectionString = "Server=localhost;Database=MixVault;User=root;Password=1234;";
@@ -31,6 +32,7 @@ app.MapGet("/users", async (MixVault db) =>
     var users = await db.Users.ToListAsync();
     return Results.Ok(users);
 });
+
 
 // GET: Alle afspeellijsten (playlists) ophalen
 app.MapGet("/playlists", async (MixVault db) =>
@@ -130,33 +132,33 @@ app.MapDelete("/users/{userId}/likes/tracks/{trackId}", async (int userId, int t
 });
 
 
-// POST: Een track liken
-app.MapPost("/users/{userId}/likes/playlist/{trackId}", async (int userId, int trackId, MixVault db) =>
+// POST: Een playlist liken
+app.MapPost("/users/{userId}/likes/playlist/{playlisId}", async (int userId, int trackId, MixVault db) =>
 {
     // Eerst controleren we of deze gebruiker dit nummer al geliket heeft om dubbele likes te voorkomen
-    var exists = await db.Userlikestracks.AnyAsync(ult => ult.FkUser == userId && ult.FkTrack == trackId);
+    var exists = await db.Userlikesplaylists.AnyAsync(ult => ult.FkUser == userId && ult.FkPlaylist == trackId);
     if (exists) return Results.Conflict("Je hebt dit nummer al geliket.");
 
     // Maak de nieuwe like aan en sla hem op in de database
-    var newLike = new Userlikestrack { FkUser = userId, FkTrack = trackId };
-    db.Userlikestracks.Add(newLike);
+    var newLike = new Userlikesplaylist { FkUser = userId, FkPlaylist = trackId };
+    db.Userlikesplaylists.Add(newLike);
     await db.SaveChangesAsync();
 
-    return Results.Ok("Nummer geliket!");
+    return Results.Ok("Playlist geliket!");
 });
 
-// DELETE: Een like van een track weghalen (un-liken)
-app.MapDelete("/users/{userId}/likes/playlist/{trackId}", async (int userId, int trackId, MixVault db) =>
+// DELETE: Een like van een playlist weghalen (un-liken)
+app.MapDelete("/users/{userId}/likes/playlist/{playlistId}", async (int userId, int trackId, MixVault db) =>
 {
     // Zoek de bestaande like op
-    var like = await db.Userlikestracks.FirstOrDefaultAsync(ult => ult.FkUser == userId && ult.FkTrack == trackId);
-    if (like == null) return Results.NotFound("Like niet gevonden.");
+    var like = await db.Userlikesplaylists.FirstOrDefaultAsync(ult => ult.FkUser == userId && ult.FkPlaylist == trackId);
+    if (like == null) return Results.NotFound("Playlist niet gevonden.");
 
     // Verwijder de like uit de database
-    db.Userlikestracks.Remove(like);
+    db.Userlikesplaylists.Remove(like);
     await db.SaveChangesAsync();
 
-    return Results.Ok("Like verwijderd!");
+    return Results.Ok("Playlist verwijderd!");
 });
 
 // POST: Een nieuw nummer uploaden (alleen de data, mp3 doen we later)
@@ -239,6 +241,44 @@ app.MapGet("/users/{userId}/likes/playlists", async (int userId, MixVault db) =>
         })
         .ToListAsync();
     return Results.Ok(likedPlaylists);
+});
+
+//Post: maak een ACC aan
+app.MapPost("/users/register", async (string username, string password, MixVault db) =>
+{
+    var exists = await db.Users
+    .AnyAsync(pbl => pbl.DisplayName == username);
+    if (exists)
+        return Results.Conflict("Acount already in bucket list");
+    //zet in databank
+    var User = new User { DisplayName = username, Password = password };
+
+    db.Users.Add(User);
+    await db.SaveChangesAsync();
+
+
+    return Results.Created($"/users/register", User);
+});
+
+// GET: Alle informatie van een specifieke gebruiker ophalen via ID
+app.MapGet("/users/{id}", async (int id, MixVault db) =>
+{
+    var user = await db.Users
+        .Where(u => u.UserId == id)
+        .Select(u => new
+        {
+            u.UserId,
+            u.DisplayName,
+            u.Email,
+            u.ProfilePictureUrl,
+            u.UserCreatedAt
+        })
+        .FirstOrDefaultAsync();
+
+    if (user == null)
+        return Results.NotFound($"Gebruiker met ID {id} is niet gevonden.");
+
+    return Results.Ok(user);
 });
 
 app.Run();

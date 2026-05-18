@@ -1,0 +1,127 @@
+﻿@page "/register"
+@rendermode InteractiveServer
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<style>
+    .login-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 80vh;
+        font-family: 'Segoe UI', sans-serif;
+    }
+
+    .login-card {
+        background: white;
+        padding: 40px;
+        border-radius: 20px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        width: 100%;
+        max-width: 400px;
+        border: 1px solid #f0f0f0;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 12px;
+        border-radius: 10px;
+        border: 2px solid #e5e7eb;
+        box-sizing: border-box;
+    }
+
+    .btn-login {
+        width: 100%;
+        background: #6366f1;
+        color: white;
+        border: none;
+        padding: 14px;
+        border-radius: 10px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+        .btn-login:hover {
+            background: #4f46e5;
+        }
+
+    .error-msg {
+        color: #dc2626;
+        margin-top: 10px;
+        text-align: center;
+    }
+</style>
+
+<div class="login-container">
+    <div class="login-card">
+        <h3>Registreren</h3>
+
+        <div class="form-group">
+            <label>Gebruikersnaam:</label>
+            <input type="text" class="form-control" @bind="username" />
+        </div>
+
+        <div class="form-group">
+            <label>Wachtwoord:</label>
+            <input type="password" class="form-control" @bind="password" />
+        </div>
+
+        <button class="btn-login" @onclick="RegisterUser">Registreer nu</button>
+
+        @if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <div class="error-msg">@ErrorMessage</div>
+        }
+    </div>
+</div>
+
+@code {
+    private string username = "";
+    private string password = "";
+    private string? ErrorMessage;
+
+    private async Task RegisterUser()
+    {
+        // 1. Basis validatie
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+        {
+            ErrorMessage = "Vul alle velden in.";
+            return;
+        }
+
+        try
+        {
+            var url = $"/users/register?username={Uri.EscapeDataString(username)}&password={Uri.EscapeDataString(password)}";
+
+            var response = await Http.PostAsync(url, content: null);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var userData = await response.Content.ReadFromJsonAsync<UserResponse>();
+                if (userData != null)
+                {
+                    Navigation.NavigateTo($"/Mixvault/{userData.IdUser}");
+                }
+            }
+
+            else
+            {
+                ErrorMessage = $"Server fout: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Verbindingsfout: {ex.Message}";
+        }
+    }
+
+    public class UserResponse
+    {
+        public int IdUser { get; set; }
+        public string NameUser { get; set; } = string.Empty;
+    }
+}
