@@ -2,6 +2,8 @@ using MixVault_FrontEnd.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddScoped<MixVault_FrontEnd.Services.Userstate>();
+
 builder.Services.AddHttpClient("MixVaultAPI", client =>
 {
     client.BaseAddress = new Uri("https://localhost:7240/");

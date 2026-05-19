@@ -5,17 +5,14 @@
 <PageTitle>MixVault - Home</PageTitle>
 
 <style>
-    /* De container die horizontaal scrollen mogelijk maakt */
     .horizontal-scroll-wrapper {
         display: flex;
         overflow-x: auto;
         gap: 1rem;
         padding-bottom: 15px;
-        /* Verbergt de scrollbar in sommige browsers voor een strakker uiterlijk */
         scrollbar-width: thin;
     }
 
-    /* Zorgt dat de kaarten niet inkrimpen en een vaste breedte hebben */
     .scroll-card {
         flex: 0 0 250px;
     }
@@ -90,22 +87,17 @@
 </div>
 
 @code {
-    // Hier slaan we de lijst met nummers in op
     private List<TrackModel>? tracks;
     private List<Playlistmodel>? playlist;
 
-    // Deze methode wordt automatisch uitgevoerd zodra de pagina laadt
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            // We pakken de verbinding die je in Program.cs hebt klaargezet
             var client = HttpClientFactory.CreateClient("MixVaultAPI");
 
-            // We halen de data op en stoppen het direct in onze lijst
-            //tracks = await client.GetFromJsonAsync<List<TrackModel>>("/tracks");
             tracks = await client.GetFromJsonAsync<List<TrackModel>>("/tracks");
-
+                
         }
         catch (Exception ex)
         {
@@ -123,7 +115,6 @@
         }
     }
 
-    // Een simpele blauwdruk die precies overeenkomt met wat onze API terugstuurt
     public class TrackModel
     {
         public int TrackId { get; set; }
