@@ -1,38 +1,19 @@
 ﻿@page "/discover"
 @rendermode InteractiveServer
 
-@using System.Net.Http.Json
 @using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
-
+@inject ProtectedLocalStorage ProtectedLocalStore
+@inject NavigationManager NavigationManager
+@inject MixVault_FrontEnd.Services.Userstate Userstate
 @inject IHttpClientFactory HttpClientFactory
 @inject MixVault_FrontEnd.Services.AudioState AudioState
-@inject MixVault_FrontEnd.Services.Userstate Userstate
-@inject NavigationManager NavigationManager
-@inject ProtectedLocalStorage ProtectedLocalStore
 
 <PageTitle>MixVault - Discover</PageTitle>
-
-<style>
-    .section-title {
-        font-weight: 800;
-        margin-top: 2rem;
-        margin-bottom: 1rem;
-    }
-
-    .card {
-        transition: transform 0.2s;
-    }
-
-        .card:hover {
-            transform: scale(1.02);
-            cursor: pointer;
-        }
-</style>
 
 @if (isCheckingLogin)
 {
     <div class="container-fluid mt-4 px-4">
-        <h4>Sessie herstellen... een moment geduld.</h4>
+        <h4>Aanmelden verifiëren... een moment geduld.</h4>
     </div>
 }
 else
@@ -41,7 +22,7 @@ else
         <h1 class="mb-4">Ontdek Nieuwe Muziek</h1>
 
         @* --- SECTIE 1: ALLE TRACKS --- *@
-        <h3 class="section-title">🌍 Wereldwijde Tracks</h3>
+        <h3>Alle Tracks</h3>
         @if (allTracks == null)
         {
             <p><em>Tracks laden...</em></p>
@@ -60,9 +41,9 @@ else
                             <div class="card-body">
                                 <h5 class="card-title text-truncate">@track.Title</h5>
                                 <h6 class="card-subtitle mb-2 text-muted">@track.UploaderName</h6>
-                                <span class="badge bg-primary">@track.TrackGenre</span>
+                                <span class="badge bg-secondary">@track.TrackGenre</span>
                                 <div class="mt-3">
-                                    <button class="btn btn-outline-success btn-sm w-100" @onclick="() => PlayTrack(track)">
+                                    <button class="btn btn-success btn-sm w-100" @onclick="() => PlayTrack(track)">
                                         ▶ Afspelen
                                     </button>
                                 </div>
@@ -76,7 +57,7 @@ else
         <hr class="my-5" />
 
         @* --- SECTIE 2: ALLE PLAYLISTS --- *@
-        <h3 class="section-title">📂 Publieke Playlists</h3>
+        <h3>Alle Playlists</h3>
         @if (allPlaylists == null)
         {
             <p><em>Playlists laden...</em></p>
@@ -95,9 +76,8 @@ else
                             <div class="card-body">
                                 <h5 class="card-title text-truncate">@playlist.PlaylistName</h5>
                                 <h6 class="card-subtitle mb-2 text-muted">@playlist.PlaylistGenre</h6>
-                                <span class="badge bg-info text-dark">@playlist.PlaylistTags</span>
                                 <div class="mt-3">
-                                    <button class="btn btn-outline-info btn-sm w-100" @onclick="async () => await PlayPlaylist(playlist)">
+                                    <button class="btn btn-info btn-sm w-100" @onclick="() => PlayPlaylist(playlist)">
                                         ▶ Afspelen
                                     </button>
                                 </div>
@@ -115,54 +95,42 @@ else
     private List<TrackModel>? allTracks;
     private List<Playlistmodel>? allPlaylists;
 
+    // Dit is de correcte methode mét firstRender
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            try
+            // 1. Controleer login via Userstate of Browser Storage
+            if (!Userstate.IsLoggedIn)
             {
-                // 1. Kijk of de service is gereset (bijv. door een F5 refresh)
-                if (!Userstate.IsLoggedIn)
+                var storedUserId = await ProtectedLocalStore.GetAsync<int>("userId");
+                var storedUserName = await ProtectedLocalStore.GetAsync<string>("userName");
+
+                if (storedUserId.Success && storedUserName.Success)
                 {
-                    var storedUserId = await ProtectedLocalStore.GetAsync<int>("userId");
-                    var storedUserName = await ProtectedLocalStore.GetAsync<string>("userName");
-
-                    if (storedUserId.Success && storedUserName.Success)
-                    {
-                        // Sessie hersteld!
-                        Userstate.LogIn(storedUserId.Value, storedUserName.Value);
-                    }
-                    else
-                    {
-                        // Geen opgeslagen sessie gevonden, ga terug naar inloggen
-                        NavigationManager.NavigateTo("/");
-                        return;
-                    }
+                    Userstate.LogIn(storedUserId.Value, storedUserName.Value);
                 }
+                else
+                {
+                    NavigationManager.NavigateTo("/");
+                    return;
+                }
+            }
 
-                // 2. Laad de muziekdata uit de API in
-                await LoadMusicData();
-            }
-            catch (Exception)
-            {
-                // Als de browserdata corrupt is of fouten geeft, stuur ze terug naar login
-                NavigationManager.NavigateTo("/");
-                return;
-            }
-            finally
-            {
-                // Zorg dat het laadscherm weggaat
-                isCheckingLogin = false;
-                StateHasChanged();
-            }
+            // 2. Haal de muziekdata op
+            await LoadMusicData();
+
+            // 3. Toon de pagina
+            isCheckingLogin = false;
+            StateHasChanged();
         }
     }
 
     private async Task LoadMusicData()
     {
+        var client = HttpClientFactory.CreateClient("MixVaultAPI");
         try
         {
-            var client = HttpClientFactory.CreateClient("MixVaultAPI");
             allTracks = await client.GetFromJsonAsync<List<TrackModel>>("tracks");
             allPlaylists = await client.GetFromJsonAsync<List<Playlistmodel>>("playlists");
         }
@@ -174,9 +142,6 @@ else
         }
     }
 
-    // --- Actie Methodes (MixVault Stijl) ---
-
-    // 1. Voor enkele nummers (Alle Tracks)
     private void PlayTrack(TrackModel track)
     {
         if (track != null && !string.IsNullOrEmpty(track.TrackFileUrl))
@@ -185,63 +150,28 @@ else
         }
     }
 
-    // 2. Voor nummers IN een playlist
-    private void PlayPlaylistTrack(PlaylistTrackModel track)
-    {
-        if (track != null && !string.IsNullOrEmpty(track.TrackFileUrl))
-        {
-            AudioState.PlayTrack(track.Title ?? "Onbekende Track", track.TrackFileUrl);
-        }
-    }
-
-    // 3. Om een hele playlist af te spelen (begint bij het eerste nummer)
     private async Task PlayPlaylist(Playlistmodel playlist)
     {
         var client = HttpClientFactory.CreateClient("MixVaultAPI");
         try
         {
-            // Haal de tracks op van deze specifieke playlist
             var playlistTracks = await client.GetFromJsonAsync<List<PlaylistTrackModel>>($"playlists/{playlist.PlaylistId}/tracks");
-
             if (playlistTracks != null && playlistTracks.Any())
             {
                 var firstTrack = playlistTracks.First();
-                PlayPlaylistTrack(firstTrack);
+                if (!string.IsNullOrEmpty(firstTrack.TrackFileUrl))
+                {
+                    AudioState.PlayTrack(firstTrack.Title ?? "Onbekende Track", firstTrack.TrackFileUrl);
+                }
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Fout bij het afspelen van playlist tracks: {ex.Message}");
+            Console.WriteLine($"Fout bij inladen playlist tracks: {ex.Message}");
         }
     }
 
-    // --- DTO Classes (MixVault Uniform Stijl) ---
-
-    public class TrackModel
-    {
-        public int TrackId { get; set; }
-        public string? Title { get; set; }
-        public double? DurationMs { get; set; }
-        public string? TrackGenre { get; set; }
-        public string? UploaderName { get; set; }
-        public string? TrackFileUrl { get; set; }
-    }
-
-    public class PlaylistTrackModel
-    {
-        public int? Position { get; set; }
-        public int TrackId { get; set; }
-        public string? Title { get; set; }
-        public double? Duration { get; set; }
-        public string? TrackFileUrl { get; set; }
-    }
-
-    public class Playlistmodel
-    {
-        public int PlaylistId { get; set; }
-        public string? PlaylistName { get; set; }
-        public string? PlaylistDescription { get; set; }
-        public string? PlaylistGenre { get; set; }
-        public string? PlaylistTags { get; set; }
-    }
+    public class TrackModel { public int TrackId { get; set; } public string? Title { get; set; } public string? TrackGenre { get; set; } public string? UploaderName { get; set; } public string? TrackFileUrl { get; set; } }
+    public class Playlistmodel { public int PlaylistId { get; set; } public string? PlaylistName { get; set; } public string? PlaylistGenre { get; set; } }
+    public class PlaylistTrackModel { public int TrackId { get; set; } public string? Title { get; set; } public string? TrackFileUrl { get; set; } }
 }
