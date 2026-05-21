@@ -1,16 +1,13 @@
 ﻿@page "/"
 
-<PageTitle>MixVault - Welcome</PageTitle>
+<div class="container mt-5">
+    <div class="mv-card p-5 text-center">
+        <h1 class="display-4 fw-bold">Welkom bij MixVault</h1>
+        <p class="lead" style="color: var(--text-soft);">Dé kluis voor al jouw mixes, bootlegs en tracks.</p>
 
-<div class="container text-center mt-5">
-    <h1 class="display-4 fw-bold">Welkom bij MixVault</h1>
-    <p class="lead mt-3">Dé kluis voor al jouw mixes, bootlegs en tracks.</p>
-
-    <div class="mt-5">
-        @* Verwijst naar jouw bestaande Login.razor *@
-        <a href="/login" class="btn btn-primary btn-lg px-4 me-3">Inloggen</a>
-
-        @* Verwijst naar jouw bestaande Register.razor *@
-        <a href="/register" class="btn btn-outline-secondary btn-lg px-4">Registreren</a>
+        <div class="mt-4">
+            <a href="login" class="btn btn-mv-accent btn-lg px-4">Inloggen</a>
+            <a href="register" class="btn btn-outline-light btn-lg px-4 ms-2">Registreren</a>
+        </div>
     </div>
 </div>
