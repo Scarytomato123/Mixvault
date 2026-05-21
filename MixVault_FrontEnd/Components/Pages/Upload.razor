@@ -1,0 +1,150 @@
+﻿@page "/upload"
+@rendermode InteractiveServer
+@inject IHttpClientFactory HttpClientFactory
+@inject Userstate Userstate
+
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Net.Http
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
+@using MixVault_FrontEnd.Services
+@using static MixVault_FrontEnd.Components.Pages.Login
+
+<PageTitle>MixVault - Upload Mix</PageTitle>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <h2 class="mb-4 fw-bold">Nieuwe Mix Uploaden 🎛️</h2>
+
+            <div class="card shadow-sm p-4 border-0" style="background-color: #f8f9fa;">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Titel van de track of mix</label>
+                    <input @bind="newTrack.Title" class="form-control form-control-lg" placeholder="Bijv. History of the Kick Drum Vol. 1" />
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-bold">Genre</label>
+                    <input @bind="newTrack.TrackGenre" class="form-control" placeholder="Bijv. Hardcore, Uptempo, Jumpstyle..." />
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-bold">Audio Bestand (.mp3 of .wav)</label>
+                    <InputFile OnChange="HandleFileSelected" class="form-control" accept=".mp3,.wav" />
+                </div>
+
+                <button class="btn btn-primary btn-lg w-100" @onclick="UploadFileAsync" disabled="@isUploading">
+                    @if (isUploading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        <span>Mix naar de kluis aan het verplaatsen...</span>
+                    }
+                    else
+                    {
+                        <span>Uploaden Naar MixVault</span>
+                    }
+                </button>
+
+                @if (!string.IsNullOrEmpty(statusMessage))
+                {
+                    <div class="alert alert-info mt-4 mb-0">
+                        @statusMessage
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private NewTrackDto newTrack = new();
+    private IBrowserFile? selectedFile;
+    private string statusMessage = "";
+    private bool isUploading = false;
+
+    private long maxFileSize = 200 * 1024 * 1024;
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        statusMessage = $"Bestand geselecteerd: {selectedFile.Name}";
+    }
+
+    private async Task UploadFileAsync()
+    {
+        if (Userstate.UserID == 0)
+        {
+            statusMessage = "Je moet ingelogd zijn om te uploaden!";
+            return;
+        }
+
+        if (selectedFile == null || string.IsNullOrWhiteSpace(newTrack.Title))
+        {
+            statusMessage = "Vul een titel in en selecteer een bestand.";
+            return;
+        }
+
+        isUploading = true;
+        statusMessage = "Bezig met uploaden... Sluit dit scherm niet af.";
+        StateHasChanged();
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("MixVaultAPI");
+
+            using var content = new MultipartFormDataContent();
+            var fileStreamContent = new StreamContent(selectedFile.OpenReadStream(maxFileSize));
+            fileStreamContent.Headers.ContentType = new MediaTypeHeaderValue(selectedFile.ContentType);
+            content.Add(fileStreamContent, "file", selectedFile.Name);
+
+            var uploadResponse = await client.PostAsync("/tracks/upload", content);
+
+            if (uploadResponse.IsSuccessStatusCode)
+            {
+                var result = await uploadResponse.Content.ReadFromJsonAsync<UploadResult>();
+
+                newTrack.TrackFileUrl = result?.FileUrl;
+                newTrack.FkUser = Userstate.UserID;
+
+                var dbResponse = await client.PostAsJsonAsync("/tracks", newTrack);
+
+                if (dbResponse.IsSuccessStatusCode)
+                {
+                    statusMessage = "Upload succesvol! Je track staat in MixVault.";
+                    newTrack = new();
+                    selectedFile = null;
+                }
+                else
+                {
+                    statusMessage = "Bestand opgeslagen, maar fout bij het opslaan in de database.";
+                }
+            }
+            else
+            {
+                statusMessage = $"Fout bij uploaden van bestand. (Code: {uploadResponse.StatusCode})";
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Er is een fout opgetreden: {ex.Message}";
+        }
+        finally
+        {
+            isUploading = false;
+            StateHasChanged();
+        }
+    }
+
+    public class UploadResult
+    {
+        public string? FileUrl { get; set; }
+    }
+
+    public class NewTrackDto
+    {
+        public string? Title { get; set; }
+        public string? TrackGenre { get; set; }
+        public string? TrackFileUrl { get; set; }
+        public int FkUser { get; set; }
+    }
+}

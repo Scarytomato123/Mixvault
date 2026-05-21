@@ -5,6 +5,12 @@ using Mixvault_API.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// --- VOEG DIT TOE: Vertel de webserver (Kestrel) dat grote bestanden (200 MB) zijn toegestaan ---
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.Limits.MaxRequestBodySize = 200 * 1024 * 1024;
+});
+
 var connectionString = "Server=localhost;Database=MixVault;User=root;Password=1234;";
 builder.Services.AddDbContext<MixVault>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
@@ -208,36 +214,37 @@ app.MapPost("/playlists/{playlistId}/tracks/{trackId}", async (int playlistId, i
     return Results.Ok(new { Bericht = "Nummer toegevoegd!", Positie = newEntry.Position });
 });
 
-//GET; Alle gelikete nummers van een specifieke gebruiker ophalen
+// GET: Alle gelikete nummers van een specifieke gebruiker ophalen
 app.MapGet("/users/{userId}/likes/tracks", async (int userId, MixVault db) =>
 {
     var likedTracks = await db.Userlikestracks
-        .Where(ult => ult.FkUser == userId)
-        .Include(ult => ult.FkTrackNavigation) // Haal de gegevens van het nummer zelf op
-        .Select(ult => new
+        .Where(u => u.FkUser == userId)
+        .Include(u => u.FkTrackNavigation)
+        .Select(u => new // <--- Veranderd naar 'u' zodat het klopt met de rest
         {
-            ult.FkTrackNavigation.TrackId,
-            ult.FkTrackNavigation.Title,
-            ult.FkTrackNavigation.DurationMs,
-            ult.FkTrackNavigation.TrackUploadedAt
+            u.FkTrackNavigation.TrackId,
+            u.FkTrackNavigation.Title,
+            u.FkTrackNavigation.DurationMs,
+            u.FkTrackNavigation.TrackUploadedAt,
+            TrackFileUrl = u.FkTrackNavigation.TrackFileUrl // <--- Nu sturen we de file URL ook mee!
         })
         .ToListAsync();
     return Results.Ok(likedTracks);
 });
 
-//GET: Alle gelikte afspeellijsten van een specifieke gebruiker ophalen
+// GET: Alle gelikte afspeellijsten van een specifieke gebruiker ophalen
 app.MapGet("/users/{userId}/likes/playlists", async (int userId, MixVault db) =>
 {
     var likedPlaylists = await db.Userlikesplaylists
-        .Where(ulp => ulp.FkUser == userId)
-        .Include(ulp => ulp.FkPlaylistNavigation) // Haal de gegevens van de afspeellijst zelf op
-        .Select(ulp => new
+        .Where(u => u.FkUser == userId) // <--- Veranderd naar 'u' voor consistentie
+        .Include(u => u.FkPlaylistNavigation)
+        .Select(u => new // <--- Veranderd naar 'u'
         {
-            ulp.FkPlaylistNavigation.PlaylistId,
-            ulp.FkPlaylistNavigation.PlaylistName,
-            ulp.FkPlaylistNavigation.PlaylistDescription,
-            ulp.FkPlaylistNavigation.PlaylistGenre,
-            ulp.FkPlaylistNavigation.PlaylistTags
+            u.FkPlaylistNavigation.PlaylistId,
+            u.FkPlaylistNavigation.PlaylistName,
+            u.FkPlaylistNavigation.PlaylistDescription,
+            u.FkPlaylistNavigation.PlaylistGenre,
+            u.FkPlaylistNavigation.PlaylistTags
         })
         .ToListAsync();
     return Results.Ok(likedPlaylists);
@@ -279,6 +286,61 @@ app.MapGet("/users/{id}", async (int id, MixVault db) =>
         return Results.NotFound($"Gebruiker met ID {id} is niet gevonden.");
 
     return Results.Ok(user);
+});
+
+// POST: Een fysiek audiobestand uploaden naar de server
+app.MapPost("/tracks/upload", async (IFormFile file) =>
+{
+    // 1. Check of er daadwerkelijk een bestand is meegestuurd
+    if (file == null || file.Length == 0)
+    {
+        return Results.BadRequest("Geen bestand geüpload of bestand is leeg.");
+    }
+
+    // 2. Bepaal de map waar we het opslaan (wwwroot/uploads/tracks)
+    var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "tracks");
+
+    // Maak de map aan als deze nog niet bestaat
+    if (!Directory.Exists(uploadPath))
+    {
+        Directory.CreateDirectory(uploadPath);
+    }
+
+    // 3. Maak een unieke bestandsnaam (zodat "mix.mp3" niet per ongeluk een andere "mix.mp3" overschrijft)
+    var fileExtension = Path.GetExtension(file.FileName); // Haalt bijv. ".mp3" op
+    var uniqueFileName = $"{Guid.NewGuid()}{fileExtension}"; // Wordt bijv. "5e8...-....mp3"
+    var filePath = Path.Combine(uploadPath, uniqueFileName);
+
+    // 4. Sla het bestand daadwerkelijk op de hardeschijf op
+    using (var stream = new FileStream(filePath, FileMode.Create))
+    {
+        await file.CopyToAsync(stream);
+    }
+
+    // 5. Geef de relatieve URL terug zodat de Frontend dit in de database kan opslaan
+    var fileUrl = $"/uploads/tracks/{uniqueFileName}";
+
+    return Results.Ok(new { FileUrl = fileUrl });
+})
+.DisableAntiforgery(); // Dit is nodig in .NET 8 om via Minimal APIs bestanden (IFormFile) te kunnen ontvangen
+
+// GET: Stream het audiobestand rechtstreeks naar de browser (omzeilt OneDrive blokkades)
+app.MapGet("/tracks/stream/{fileName}", async (string fileName) =>
+{
+    var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "tracks");
+    var filePath = Path.Combine(uploadPath, fileName);
+
+    if (!File.Exists(filePath))
+    {
+        return Results.NotFound("Bestand niet gevonden op de server.");
+    }
+
+    // Bepaal het juiste content-type op basis van de extensie
+    var contentType = fileName.EndsWith(".wav") ? "audio/wav" : "audio/mpeg";
+
+    // Open het bestand en stream het rechtstreeks naar de speler
+    var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+    return Results.File(fileStream, contentType, enableRangeProcessing: true);
 });
 
 app.Run();
