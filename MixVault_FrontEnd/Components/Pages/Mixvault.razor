@@ -123,6 +123,7 @@ else
     </div>
 
     @* --- MODALS VOOR DETAILS --- *@
+
     @if (selectedTrack != null)
     {
         <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.6);">
@@ -245,15 +246,13 @@ else
             }
             catch (Exception)
             {
-                // FOUT AFVANGEN: Als de encryptiesleutels van de server zijn gewijzigd
-                // en hij de browser-data niet meer kan lezen, stuur we je terug naar login.
+                // Als browser data corrupt is na een koude herstart van de server, sturen we ze terug naar login
                 NavigationManager.NavigateTo("/");
                 return;
             }
             finally
             {
-                // FINALLY zorgt ervoor dat dit ALTIJD wordt uitgevoerd,
-                // zelfs als er een fout optrad! Het laadscherm gaat nu gegarandeerd weg.
+                // Het laadscherm gaat nu ALTIJD weg zodra de check klaar is
                 isCheckingLogin = false;
                 StateHasChanged();
             }
@@ -283,6 +282,8 @@ else
         catch (Exception ex)
         {
             Console.WriteLine($"Fout bij inladen data: {ex.Message}");
+            tracks = new List<TrackModel>();
+            Playlist = new List<Playlistmodel>();
         }
     }
 
