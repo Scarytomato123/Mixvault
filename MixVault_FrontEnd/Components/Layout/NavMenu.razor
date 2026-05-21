@@ -1,4 +1,8 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
+﻿@rendermode InteractiveServer
+@implements IDisposable
+@inject MixVault_FrontEnd.Services.Userstate Userstate
+
+<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">MixVault_FrontEnd</a>
     </div>
@@ -25,6 +29,34 @@
                 <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> register
             </NavLink>
         </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="discover">
+                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Discover
+            </NavLink>
+        </div>
+
+        @if (Userstate.IsLoggedIn)
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="@($"MixVault/{Userstate.UserID}")">
+                    <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Mijn MixVault
+                </NavLink>
+            </div>
+        }
     </nav>
 </div>
 
+@code {
+    protected override void OnInitialized()
+    {
+        // Abonneer het menu op wijzigingen: hertekenen zodra iemand inlogt of uitlogt
+        Userstate.OnChange += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+        // Netjes opruimen als het menu verdwijnt
+        Userstate.OnChange -= StateHasChanged;
+    }
+}

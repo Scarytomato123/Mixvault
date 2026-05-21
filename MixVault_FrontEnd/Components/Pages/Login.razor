@@ -3,8 +3,10 @@
 @rendermode InteractiveServer
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
-@inject HttpClient Http
 @inject Userstate UserState
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject ProtectedLocalStorage ProtectedLocalStore
+
 
 
 <style>
@@ -148,9 +150,17 @@
             if (response.IsSuccessStatusCode)
             {
                 var userData = await response.Content.ReadFromJsonAsync<UserResponse>();
-                
+
                 if (userData != null)
                 {
+                    // 1. Vertel de app dat we ingelogd zijn (dit laat de knop in NavMenu verschijnen!)
+                    UserState.LogIn(userData.IdUser, userData.NameUser);
+
+                    // 2. Sla het veilig op in de browser (dit fixt de F5 refresh bug!)
+                    await ProtectedLocalStore.SetAsync("userId", userData.IdUser);
+                    await ProtectedLocalStore.SetAsync("userName", userData.NameUser);
+
+                    // 3. Stuur de gebruiker door naar zijn kluis
                     Navigation.NavigateTo($"/MixVault/{userData.IdUser}");
                 }
             }
@@ -170,7 +180,5 @@
     {
         public int IdUser { get; set; }
         public string NameUser { get; set; } = string.Empty;
-    }
-}
     }
 }

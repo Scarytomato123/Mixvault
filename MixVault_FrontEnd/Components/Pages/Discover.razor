@@ -1,0 +1,177 @@
+﻿@page "/discover"
+@rendermode InteractiveServer
+
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject ProtectedLocalStorage ProtectedLocalStore
+@inject NavigationManager NavigationManager
+@inject MixVault_FrontEnd.Services.Userstate Userstate
+@inject IHttpClientFactory HttpClientFactory
+@inject MixVault_FrontEnd.Services.AudioState AudioState
+
+<PageTitle>MixVault - Discover</PageTitle>
+
+@if (isCheckingLogin)
+{
+    <div class="container-fluid mt-4 px-4">
+        <h4>Aanmelden verifiëren... een moment geduld.</h4>
+    </div>
+}
+else
+{
+    <div class="container-fluid mt-4 px-4">
+        <h1 class="mb-4">Ontdek Nieuwe Muziek</h1>
+
+        @* --- SECTIE 1: ALLE TRACKS --- *@
+        <h3>Alle Tracks</h3>
+        @if (allTracks == null)
+        {
+            <p><em>Tracks laden...</em></p>
+        }
+        else if (allTracks.Count == 0)
+        {
+            <p>Geen tracks gevonden in de database.</p>
+        }
+        else
+        {
+            <div class="row">
+                @foreach (var track in allTracks)
+                {
+                    <div class="col-md-3 mb-3">
+                        <div class="card shadow-sm">
+                            <div class="card-body">
+                                <h5 class="card-title text-truncate">@track.Title</h5>
+                                <h6 class="card-subtitle mb-2 text-muted">@track.UploaderName</h6>
+                                <span class="badge bg-secondary">@track.TrackGenre</span>
+                                <div class="mt-3">
+                                    <button class="btn btn-success btn-sm w-100" @onclick="() => PlayTrack(track)">
+                                        ▶ Afspelen
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        <hr class="my-5" />
+
+        @* --- SECTIE 2: ALLE PLAYLISTS --- *@
+        <h3>Alle Playlists</h3>
+        @if (allPlaylists == null)
+        {
+            <p><em>Playlists laden...</em></p>
+        }
+        else if (allPlaylists.Count == 0)
+        {
+            <p>Geen playlists gevonden.</p>
+        }
+        else
+        {
+            <div class="row">
+                @foreach (var playlist in allPlaylists)
+                {
+                    <div class="col-md-3 mb-3">
+                        <div class="card shadow-sm border-info">
+                            <div class="card-body">
+                                <h5 class="card-title text-truncate">@playlist.PlaylistName</h5>
+                                <h6 class="card-subtitle mb-2 text-muted">@playlist.PlaylistGenre</h6>
+                                <div class="mt-3">
+                                    <button class="btn btn-info btn-sm w-100" @onclick="() => PlayPlaylist(playlist)">
+                                        ▶ Afspelen
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private bool isCheckingLogin = true;
+    private List<TrackModel>? allTracks;
+    private List<Playlistmodel>? allPlaylists;
+
+    // Dit is de correcte methode mét firstRender
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // 1. Controleer login via Userstate of Browser Storage
+            if (!Userstate.IsLoggedIn)
+            {
+                var storedUserId = await ProtectedLocalStore.GetAsync<int>("userId");
+                var storedUserName = await ProtectedLocalStore.GetAsync<string>("userName");
+
+                if (storedUserId.Success && storedUserName.Success)
+                {
+                    Userstate.LogIn(storedUserId.Value, storedUserName.Value);
+                }
+                else
+                {
+                    NavigationManager.NavigateTo("/");
+                    return;
+                }
+            }
+
+            // 2. Haal de muziekdata op
+            await LoadMusicData();
+
+            // 3. Toon de pagina
+            isCheckingLogin = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadMusicData()
+    {
+        var client = HttpClientFactory.CreateClient("MixVaultAPI");
+        try
+        {
+            allTracks = await client.GetFromJsonAsync<List<TrackModel>>("tracks");
+            allPlaylists = await client.GetFromJsonAsync<List<Playlistmodel>>("playlists");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Fout bij inladen discover data: {ex.Message}");
+            allTracks = new List<TrackModel>();
+            allPlaylists = new List<Playlistmodel>();
+        }
+    }
+
+    private void PlayTrack(TrackModel track)
+    {
+        if (track != null && !string.IsNullOrEmpty(track.TrackFileUrl))
+        {
+            AudioState.PlayTrack(track.Title ?? "Onbekende Track", track.TrackFileUrl);
+        }
+    }
+
+    private async Task PlayPlaylist(Playlistmodel playlist)
+    {
+        var client = HttpClientFactory.CreateClient("MixVaultAPI");
+        try
+        {
+            var playlistTracks = await client.GetFromJsonAsync<List<PlaylistTrackModel>>($"playlists/{playlist.PlaylistId}/tracks");
+            if (playlistTracks != null && playlistTracks.Any())
+            {
+                var firstTrack = playlistTracks.First();
+                if (!string.IsNullOrEmpty(firstTrack.TrackFileUrl))
+                {
+                    AudioState.PlayTrack(firstTrack.Title ?? "Onbekende Track", firstTrack.TrackFileUrl);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Fout bij inladen playlist tracks: {ex.Message}");
+        }
+    }
+
+    public class TrackModel { public int TrackId { get; set; } public string? Title { get; set; } public string? TrackGenre { get; set; } public string? UploaderName { get; set; } public string? TrackFileUrl { get; set; } }
+    public class Playlistmodel { public int PlaylistId { get; set; } public string? PlaylistName { get; set; } public string? PlaylistGenre { get; set; } }
+    public class PlaylistTrackModel { public int TrackId { get; set; } public string? Title { get; set; } public string? TrackFileUrl { get; set; } }
+}
