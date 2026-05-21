@@ -1,22 +1,60 @@
-html {
-  font-size: 14px;
-}
-
-@media (min-width: 768px) {
-  html {
-    font-size: 16px;
-  }
-}
-
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
-}
-
-html {
-  position: relative;
-  min-height: 100%;
+/* MixVault Design System - Gebaseerd op Logo */
+:root {
+    --bg-dark: #2D1B36;       /* Diep Paars van het logo */
+    --bg-card: #3a2445;       /* Iets lichtere paars voor kaarten */
+    --accent-pink: #FF4081;   /* De knallende magenta/roze uit het logo */
+    --text-white: #ffffff;
+    --text-soft: #d1d1d1;
 }
 
 body {
-  margin-bottom: 60px;
+    background-color: var(--bg-dark);
+    color: var(--text-white);
+    font-family: 'Segoe UI', sans-serif;
+    margin: 0;
+}
+
+/* Sidebar en Topbar */
+.sidebar {
+    background-color: #1a0f20 !important;
+}
+
+.top-row {
+    background-color: var(--bg-dark) !important;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+/* De 'MixVault' Card Stijl */
+.mv-card {
+    background-color: var(--bg-card);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    transition: transform 0.2s, border-color 0.2s;
+}
+
+.mv-card:hover {
+    border-color: var(--accent-pink);
+    transform: translateY(-5px);
+}
+
+/* Magenta actie knoppen */
+.btn-mv-accent {
+    background-color: var(--accent-pink);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+.btn-mv-accent:hover {
+    filter: brightness(1.1);
+    color: white;
+}
+
+/* Scrollbare lijsten */
+.mv-scroll-container {
+    display: flex;
+    overflow-x: auto;
+    gap: 1rem;
+    padding-bottom: 10px;
 }

@@ -10,75 +10,100 @@
 @inject NavigationManager NavigationManager
 @inject ProtectedLocalStorage ProtectedLocalStore
 
-<PageTitle>MixVault - Home</PageTitle>
+<PageTitle>Mijn MixVault</PageTitle>
 
 <style>
     .horizontal-scroll-wrapper {
         display: flex;
         overflow-x: auto;
-        gap: 1rem;
+        gap: 1.5rem;
         padding-bottom: 15px;
         scrollbar-width: thin;
+        /* Gebruik hier onze globale roze kleur voor de scrollbar */
+        scrollbar-color: var(--accent-pink) #222;
     }
 
     .scroll-card {
-        flex: 0 0 250px;
+        flex: 0 0 260px;
         cursor: pointer;
-        transition: transform 0.2s;
+        transition: transform 0.2s, border-color 0.2s;
     }
 
-        .scroll-card:hover {
-            transform: scale(1.02);
-        }
-
+    /* We gebruiken hier de mv-card klasse uit app.css */
     .section-title {
         font-weight: 800;
         margin-top: 2rem;
         margin-bottom: 1rem;
-    }
-
-    .playlist-tracks-scroll {
-        max-height: 250px;
-        overflow-y: auto;
-        scrollbar-width: thin;
+        color: var(--text-white);
     }
 </style>
 
 @if (isCheckingLogin)
 {
-    <div class="container-fluid mt-4 px-4">
+    <div class="container-fluid mt-4 px-4 text-white">
         <h4>Sessie herstellen... een moment geduld.</h4>
     </div>
 }
 else
 {
-    <div class="container-fluid mt-4 px-4">
-        <h1 class="mb-4">Hallo @Userstate.DisplayName</h1>
+    <div class="container-fluid mt-4 px-4 text-white">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="fw-bold m-0">Welkom terug, @Userstate.DisplayName</h1>
 
-        @* --- RIJ 1: GELIKETE NUMMERS --- *@
-        <h3 class="section-title">❤️ Jouw Favorieten</h3>
-        @if (tracks == null)
+            @* --- ZOEKEN BINNEN JE KLUIS --- *@
+            <div style="width: 300px;">
+                <input type="text" class="form-control bg-dark text-white border-secondary"
+                       placeholder="🔍 Zoek in je kluis..."
+                       @bind="SearchText" @bind:event="oninput" />
+            </div>
+        </div>
+
+        @* --- RIJ 1: JOUW UPLOADS --- *@
+        <h3 class="section-title">☁️ Mijn Uploads</h3>
+        @if (filteredMyUploads == null)
         {
-            <p><em>Nummers laden...</em></p>
+            <p class="text-muted"><em>Uploads laden...</em></p>
         }
-        else if (tracks.Count == 0)
+        else if (filteredMyUploads.Count == 0)
         {
-            <p>Geen gelikete nummers gevonden.</p>
+            <p class="text-muted">Je hebt nog geen eigen nummers geüpload of gevonden.</p>
         }
         else
         {
             <div class="horizontal-scroll-wrapper">
-                @foreach (var track in tracks)
+                @foreach (var track in filteredMyUploads)
                 {
-                    <div class="card shadow-sm scroll-card" @onclick="() => OpenTrackDetails(track)">
+                    @* mv-card geeft de paarse achtergrond, scroll-card zorgt voor de vorm *@
+                    <div class="mv-card scroll-card p-3" @onclick="() => PlayTrack(track)">
+                        <h5 class="fw-bold">@track.Title</h5>
+                        <p class="text-muted">@track.UploaderName</p>
+                    </div>
+                }
+            </div>
+        }
+
+        @* --- RIJ 2: GELIKETE NUMMERS --- *@
+        <h3 class="section-title">❤️ Jouw Favorieten</h3>
+        @if (filteredLikedTracks == null)
+        {
+            <p class="text-muted"><em>Nummers laden...</em></p>
+        }
+        else if (filteredLikedTracks.Count == 0)
+        {
+            <p class="text-muted">Geen favoriete nummers gevonden.</p>
+        }
+        else
+        {
+            <div class="horizontal-scroll-wrapper">
+                @foreach (var track in filteredLikedTracks)
+                {
+                    <div class="card shadow-sm bg-dark text-white border-secondary scroll-card" @onclick="() => OpenTrackDetails(track)">
                         <div class="card-body">
                             <h5 class="card-title text-truncate">@track.Title</h5>
                             <h6 class="card-subtitle mb-2 text-muted">@track.UploaderName</h6>
-                            <span class="badge bg-primary">@track.TrackGenre</span>
+                            <span class="badge bg-secondary">@track.TrackGenre</span>
                             <div class="mt-3">
-                                <button class="btn btn-outline-success btn-sm w-100"
-                                        @onclick:stopPropagation="true"
-                                        @onclick="() => PlayTrack(track)">
+                                <button class="btn btn-outline-success btn-sm w-100" @onclick:stopPropagation="true" @onclick="() => PlayTrack(track)">
                                     ▶ Afspelen
                                 </button>
                             </div>
@@ -88,30 +113,28 @@ else
             </div>
         }
 
-        @* --- RIJ 2: PLAYLIST --- *@
-        <h3 class="section-title">📂 Playlists</h3>
-        @if (Playlist == null)
+        @* --- RIJ 3: JOUW PLAYLISTS --- *@
+        <h3 class="section-title">📂 Opgeslagen Playlists</h3>
+        @if (filteredLikedPlaylists == null)
         {
-            <p><em>Playlists laden...</em></p>
+            <p class="text-muted"><em>Playlists laden...</em></p>
         }
-        else if (Playlist.Count == 0)
+        else if (filteredLikedPlaylists.Count == 0)
         {
-            <p>Er zijn nog geen playlists.</p>
+            <p class="text-muted">Geen playlists gevonden.</p>
         }
         else
         {
             <div class="horizontal-scroll-wrapper">
-                @foreach (var item in Playlist)
+                @foreach (var item in filteredLikedPlaylists)
                 {
-                    <div class="card shadow-sm scroll-card border-info" @onclick="() => OpenPlaylistDetails(item)">
+                    <div class="card shadow-sm bg-dark text-white border-info scroll-card" @onclick="() => OpenPlaylistDetails(item)">
                         <div class="card-body">
                             <h5 class="card-title text-truncate">@item.PlaylistName</h5>
                             <h6 class="card-subtitle mb-2 text-muted">@item.PlaylistGenre</h6>
                             <span class="badge bg-info text-dark">@item.PlaylistTags</span>
                             <div class="mt-3">
-                                <button class="btn btn-outline-info btn-sm w-100"
-                                        @onclick:stopPropagation="true"
-                                        @onclick="() => PlayPlaylist(item)">
+                                <button class="btn btn-outline-info btn-sm w-100" @onclick:stopPropagation="true" @onclick="async () => await PlayPlaylist(item)">
                                     ▶ Afspelen
                                 </button>
                             </div>
@@ -122,26 +145,27 @@ else
         }
     </div>
 
-    @* --- MODALS VOOR DETAILS --- *@
-
+    @* --- MODALS (Exact dezelfde stijl als Discover) --- *@
     @if (selectedTrack != null)
     {
-        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.6);">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Track Info</h5>
-                        <button type="button" class="btn-close" @onclick="CloseDetails"></button>
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.8);">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content bg-dark text-white border-success">
+                    <div class="modal-header border-secondary">
+                        <h5 class="modal-title text-success">Track Info</h5>
+                        <button type="button" class="btn-close btn-close-white" @onclick="CloseDetails"></button>
                     </div>
-                    <div class="modal-body">
-                        <h4>@selectedTrack.Title</h4>
-                        <p class="text-muted">Door: @selectedTrack.UploaderName</p>
-                        <p><strong>Genre:</strong> @selectedTrack.TrackGenre</p>
-                        <p><strong>Duur:</strong> @(selectedTrack.DurationMs.HasValue? Math.Round(selectedTrack.DurationMs.Value / 60000, 2).ToString("0.00") : "Onbekend") min</p>
+                    <div class="modal-body text-center py-5">
+                        <h2 class="fw-bold">@selectedTrack.Title</h2>
+                        <h4 class="text-muted mb-4">Gemixt door: @selectedTrack.UploaderName</h4>
+                        <div class="d-flex justify-content-center gap-3 mb-4">
+                            <span class="badge bg-secondary fs-6 p-2">Genre: @selectedTrack.TrackGenre</span>
+                            <span class="badge bg-secondary fs-6 p-2">Duur: @(selectedTrack.DurationMs.HasValue? Math.Round(selectedTrack.DurationMs.Value / 60000, 2).ToString("0.00") : "Onbekend") min</span>
+                        </div>
                     </div>
-                    <div class="modal-footer">
-                        <button class="btn btn-success" @onclick="() => PlayTrack(selectedTrack)">▶ Afspelen</button>
-                        <button class="btn btn-secondary" @onclick="CloseDetails">Sluiten</button>
+                    <div class="modal-footer border-secondary justify-content-center gap-2">
+                        <button class="btn btn-success btn-lg px-4" @onclick="() => PlayTrack(selectedTrack)">▶ Afspelen</button>
+                        <button class="btn btn-outline-danger btn-lg px-4" @onclick="UnlikeTrack">💔 Verwijder uit Favorieten</button>
                     </div>
                 </div>
             </div>
@@ -150,47 +174,39 @@ else
 
     @if (selectedPlaylist != null)
     {
-        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.6);">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Playlist Info</h5>
-                        <button type="button" class="btn-close" @onclick="CloseDetails"></button>
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.8);">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content bg-dark text-white border-info">
+                    <div class="modal-header border-secondary">
+                        <h5 class="modal-title text-info">Playlist Info</h5>
+                        <button type="button" class="btn-close btn-close-white" @onclick="CloseDetails"></button>
                     </div>
                     <div class="modal-body">
-                        <h4>@selectedPlaylist.PlaylistName</h4>
+                        <h3 class="fw-bold">@selectedPlaylist.PlaylistName</h3>
                         <p class="text-muted">@selectedPlaylist.PlaylistDescription</p>
-                        <p><strong>Genre:</strong> <span class="badge bg-info text-dark">@selectedPlaylist.PlaylistGenre</span></p>
-
-                        <hr />
-                        <h5>Tracks</h5>
+                        <hr class="border-secondary" />
+                        <h5>Tracks in deze lijst</h5>
                         <div class="playlist-tracks-scroll">
                             @if (selectedPlaylist.Tracks != null && selectedPlaylist.Tracks.Any())
                             {
-                                <ul class="list-group">
+                                <ul class="list-group list-group-flush bg-dark">
                                     @foreach (var track in selectedPlaylist.Tracks)
                                     {
-                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        <li class="list-group-item bg-dark text-white d-flex justify-content-between align-items-center border-secondary">
                                             <div>
                                                 <strong>@(track.Position). @track.Title</strong><br />
-                                                <small class="text-muted">
-                                                    Duur: @(track.Duration.HasValue? Math.Round(track.Duration.Value / 60000, 2).ToString("0.00") : "Onbekend") min
-                                                </small>
+                                                <small class="text-muted">Duur: @(track.Duration.HasValue? Math.Round(track.Duration.Value / 60000, 2).ToString("0.00") : "Onbekend") min</small>
                                             </div>
                                             <button class="btn btn-sm btn-outline-success" @onclick="() => PlayPlaylistTrack(track)">▶</button>
                                         </li>
                                     }
                                 </ul>
                             }
-                            else
-                            {
-                                <p class="text-muted">Geen nummers in deze playlist.</p>
-                            }
                         </div>
                     </div>
-                    <div class="modal-footer">
-                        <button class="btn btn-info" @onclick="() => PlayPlaylist(selectedPlaylist)">▶ Alles Afspelen</button>
-                        <button class="btn btn-secondary" @onclick="CloseDetails">Sluiten</button>
+                    <div class="modal-footer border-secondary justify-content-center gap-2">
+                        <button class="btn btn-info btn-lg px-4 text-dark" @onclick="async () => await PlayPlaylist(selectedPlaylist)">▶ Alles Afspelen</button>
+                        <button class="btn btn-outline-danger btn-lg px-4" @onclick="UnlikePlaylist">💔 Verwijder Playlist</button>
                     </div>
                 </div>
             </div>
@@ -202,8 +218,24 @@ else
     [Parameter] public int userId { get; set; }
 
     private bool isCheckingLogin = true;
-    private List<TrackModel>? tracks;
-    private List<Playlistmodel>? Playlist;
+
+    // Basis lijsten vanuit API
+    private List<TrackModel>? likedTracks;
+    private List<Playlistmodel>? likedPlaylists;
+    private List<TrackModel>? myUploads;
+
+    // Gefilterde lijsten voor UI
+    private List<TrackModel>? filteredLikedTracks;
+    private List<Playlistmodel>? filteredLikedPlaylists;
+    private List<TrackModel>? filteredMyUploads;
+
+    // Zoekbalk koppeling
+    private string _searchText = "";
+    private string SearchText
+    {
+        get => _searchText;
+        set { _searchText = value; ApplySearchFilter(); }
+    }
 
     private TrackModel? selectedTrack;
     private Playlistmodel? selectedPlaylist;
@@ -214,45 +246,35 @@ else
         {
             try
             {
-                // 1. Kijk of de service is gereset (bijv. door een F5 refresh)
                 if (!Userstate.IsLoggedIn)
                 {
-                    // Probeer de gegevens uit de browser opslag te halen
                     var storedUserId = await ProtectedLocalStore.GetAsync<int>("userId");
                     var storedUserName = await ProtectedLocalStore.GetAsync<string>("userName");
 
                     if (storedUserId.Success && storedUserName.Success)
-                    {
-                        // Sessie hersteld!
                         Userstate.LogIn(storedUserId.Value, storedUserName.Value);
-                    }
                     else
                     {
-                        // Geen opgeslagen sessie gevonden, ga terug naar inloggen
                         NavigationManager.NavigateTo("/");
                         return;
                     }
                 }
 
-                // 2. Beveiliging: zorg dat de URL klopt met de ingelogde gebruiker
                 if (userId != Userstate.UserID)
                 {
                     NavigationManager.NavigateTo($"/MixVault/{Userstate.UserID}");
                     return;
                 }
 
-                // 3. Laad de data in
                 await LoadDashboardData();
             }
             catch (Exception)
             {
-                // Als browser data corrupt is na een koude herstart van de server, sturen we ze terug naar login
                 NavigationManager.NavigateTo("/");
                 return;
             }
             finally
             {
-                // Het laadscherm gaat nu ALTIJD weg zodra de check klaar is
                 isCheckingLogin = false;
                 StateHasChanged();
             }
@@ -264,30 +286,42 @@ else
         try
         {
             var client = HttpClientFactory.CreateClient("MixVaultAPI");
-            var userdata = await client.GetAsync($"/users/{userId}");
 
-            if (userdata.IsSuccessStatusCode)
+            // Haal de favorieten op
+            likedTracks = await client.GetFromJsonAsync<List<TrackModel>>($"users/{userId}/likes/tracks");
+            likedPlaylists = await client.GetFromJsonAsync<List<Playlistmodel>>($"users/{userId}/likes/playlists");
+
+            // Haal alle tracks ter wereld op, en filter direct op degene die JIJ hebt geüpload!
+            var allWorldTracks = await client.GetFromJsonAsync<List<TrackModel>>("tracks");
+            if (allWorldTracks != null)
             {
-                var userDetails = await userdata.Content.ReadFromJsonAsync<UserResponse>();
-                if (userDetails != null)
-                {
-                    Userstate.UserID = userDetails.UserId;
-                    Userstate.DisplayName = userDetails.DisplayName;
-                }
+                myUploads = allWorldTracks.Where(t => t.UploaderName == Userstate.DisplayName).ToList();
             }
 
-            tracks = await client.GetFromJsonAsync<List<TrackModel>>($"users/{userId}/likes/tracks");
-            Playlist = await client.GetFromJsonAsync<List<Playlistmodel>>($"users/{userId}/likes/playlists");
+            // Kopieer data naar de gefilterde lijsten voor de start
+            ApplySearchFilter();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Fout bij inladen data: {ex.Message}");
-            tracks = new List<TrackModel>();
-            Playlist = new List<Playlistmodel>();
+            likedTracks = new(); likedPlaylists = new(); myUploads = new();
+            ApplySearchFilter();
         }
     }
 
-    // --- Actie Methodes ---
+    private void ApplySearchFilter()
+    {
+        if (likedTracks != null)
+            filteredLikedTracks = likedTracks.Where(t => string.IsNullOrWhiteSpace(SearchText) || (t.Title != null && t.Title.Contains(SearchText, StringComparison.OrdinalIgnoreCase))).ToList();
+
+        if (likedPlaylists != null)
+            filteredLikedPlaylists = likedPlaylists.Where(p => string.IsNullOrWhiteSpace(SearchText) || (p.PlaylistName != null && p.PlaylistName.Contains(SearchText, StringComparison.OrdinalIgnoreCase))).ToList();
+
+        if (myUploads != null)
+            filteredMyUploads = myUploads.Where(t => string.IsNullOrWhiteSpace(SearchText) || (t.Title != null && t.Title.Contains(SearchText, StringComparison.OrdinalIgnoreCase))).ToList();
+    }
+
+    // --- MODAL & ACTIE METHODES ---
 
     private void OpenTrackDetails(TrackModel track)
     {
@@ -300,22 +334,13 @@ else
     {
         selectedPlaylist = item;
         selectedTrack = null;
-
         try
         {
             var client = HttpClientFactory.CreateClient("MixVaultAPI");
             var playlistTracks = await client.GetFromJsonAsync<List<PlaylistTrackModel>>($"playlists/{item.PlaylistId}/tracks");
-
-            if (playlistTracks != null)
-            {
-                selectedPlaylist.Tracks = playlistTracks;
-            }
+            if (playlistTracks != null) selectedPlaylist.Tracks = playlistTracks;
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Fout bij het ophalen van playlist tracks: {ex.Message}");
-        }
-
+        catch (Exception) { }
         StateHasChanged();
     }
 
@@ -326,71 +351,67 @@ else
         StateHasChanged();
     }
 
-    // 1. Voor enkele nummers (Favorieten)
+    // Verwijder track uit je likes (via de DELETE API)
+    private async Task UnlikeTrack()
+    {
+        if (selectedTrack == null) return;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("MixVaultAPI");
+            await client.DeleteAsync($"/users/{userId}/likes/tracks/{selectedTrack.TrackId}");
+            await LoadDashboardData(); // Herlaad de kluis
+            CloseDetails();
+        }
+        catch { }
+    }
+
+    // Verwijder playlist uit je likes
+    private async Task UnlikePlaylist()
+    {
+        if (selectedPlaylist == null) return;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("MixVaultAPI");
+            await client.DeleteAsync($"/users/{userId}/likes/playlist/{selectedPlaylist.PlaylistId}");
+            await LoadDashboardData(); // Herlaad de kluis
+            CloseDetails();
+        }
+        catch { }
+    }
+
+    // --- AUDIO AFSPELEN ---
     private void PlayTrack(TrackModel track)
     {
         if (track != null && !string.IsNullOrEmpty(track.TrackFileUrl))
-        {
             AudioState.PlayTrack(track.Title ?? "Onbekende Track", track.TrackFileUrl);
-        }
     }
 
-    // 2. Voor nummers IN een playlist
     private void PlayPlaylistTrack(PlaylistTrackModel track)
     {
         if (track != null && !string.IsNullOrEmpty(track.TrackFileUrl))
-        {
             AudioState.PlayTrack(track.Title ?? "Onbekende Track", track.TrackFileUrl);
-        }
     }
 
-    // 3. Om een hele playlist af te spelen
-    private void PlayPlaylist(Playlistmodel playlist)
+    private async Task PlayPlaylist(Playlistmodel playlist)
     {
-        if (playlist.Tracks != null && playlist.Tracks.Any())
+        if (playlist.Tracks == null || !playlist.Tracks.Any())
         {
-            var firstTrack = playlist.Tracks.First();
-            PlayPlaylistTrack(firstTrack);
+            // Als de tracks nog niet in de modal waren ingeladen, halen we ze snel op
+            var client = HttpClientFactory.CreateClient("MixVaultAPI");
+            var playlistTracks = await client.GetFromJsonAsync<List<PlaylistTrackModel>>($"playlists/{playlist.PlaylistId}/tracks");
+            if (playlistTracks != null && playlistTracks.Any())
+            {
+                PlayPlaylistTrack(playlistTracks.First());
+            }
+        }
+        else
+        {
+            PlayPlaylistTrack(playlist.Tracks.First());
         }
     }
 
     // --- DTO Classes ---
-
-    public class TrackModel
-    {
-        public int TrackId { get; set; }
-        public string? Title { get; set; }
-        public double? DurationMs { get; set; }
-        public string? TrackGenre { get; set; }
-        public string? UploaderName { get; set; }
-        public string? TrackFileUrl { get; set; }
-    }
-
-    public class PlaylistTrackModel
-    {
-        public int? Position { get; set; }
-        public int TrackId { get; set; }
-        public string? Title { get; set; }
-        public double? Duration { get; set; }
-        public string? TrackFileUrl { get; set; }
-    }
-
-    public class Playlistmodel
-    {
-        public int PlaylistId { get; set; }
-        public string? PlaylistName { get; set; }
-        public string? PlaylistDescription { get; set; }
-        public string? PlaylistGenre { get; set; }
-        public string? PlaylistTags { get; set; }
-        public List<PlaylistTrackModel> Tracks { get; set; } = new();
-    }
-
-    public class UserResponse
-    {
-        public int UserId { get; set; }
-        public string? DisplayName { get; set; }
-        public string? Email { get; set; }
-        public string? ProfilePictureUrl { get; set; }
-        public DateTime? UserCreatedAt { get; set; }
-    }
+    public class TrackModel { public int TrackId { get; set; } public string? Title { get; set; } public double? DurationMs { get; set; } public string? TrackGenre { get; set; } public string? UploaderName { get; set; } public string? TrackFileUrl { get; set; } }
+    public class PlaylistTrackModel { public int? Position { get; set; } public int TrackId { get; set; } public string? Title { get; set; } public double? Duration { get; set; } public string? TrackFileUrl { get; set; } }
+    public class Playlistmodel { public int PlaylistId { get; set; } public string? PlaylistName { get; set; } public string? PlaylistDescription { get; set; } public string? PlaylistGenre { get; set; } public string? PlaylistTags { get; set; } public List<PlaylistTrackModel> Tracks { get; set; } = new(); }
 }
