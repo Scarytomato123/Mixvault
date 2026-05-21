@@ -9,11 +9,13 @@
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="MixVault_FrontEnd.styles.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
-    <HeadOutlet />
+    @* Zorgt dat de head interactief updates kan ontvangen *@
+    <HeadOutlet @rendermode="InteractiveServer" />
 </head>
 
 <body>
-    <Routes />
+    @* Zorgt dat je hele routing en MainLayout live kunnen communiceren via de server *@
+    <Routes @rendermode="InteractiveServer" />
     <script src="_framework/blazor.web.js"></script>
 </body>
 
