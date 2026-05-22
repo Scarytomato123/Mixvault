@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Mixvault_API.Models;
+using Microsoft.AspNetCore.Http;
+using System.IO;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -58,21 +60,25 @@ app.MapGet("/playlists", async (MixVault db) =>
     return Results.Ok(playlists);
 });
 
-// GET: Alle nummers (tracks) ophalen
+// GET: Alle nummers (tracks) ophalen inclusief de naam van de uploader uit de Users tabel!
 app.MapGet("/tracks", async (MixVault db) =>
 {
     var tracks = await db.Tracks
+        .Include(t => t.FkUserNavigation) // Zorgt ervoor dat Entity Framework de User-data inlaadt
         .Select(t => new
         {
             t.TrackId,
             t.Title,
+            t.TrackArtist,
+            t.TrackGenre,
             t.DurationMs,
-            t.TrackUploadedAt
+            t.TrackUploadedAt,
+            t.TrackFileUrl,
+            UploaderName = t.FkUserNavigation != null ? t.FkUserNavigation.DisplayName : "Onbekende DJ" // <-- HIER FIXEN WE DE NAAM!
         })
         .ToListAsync();
     return Results.Ok(tracks);
 });
-
 //GET: kijk als wachtwoord en username overeenkomen en link met id
 app.MapGet("/login", async (string username, string password, MixVault db) =>
 {
@@ -166,20 +172,76 @@ app.MapDelete("/users/{userId}/likes/playlist/{playlistId}", async (int userId, 
 
     return Results.Ok("Playlist verwijderd!");
 });
-
-// POST: Een nieuw nummer uploaden (alleen de data, mp3 doen we later)
-app.MapPost("/tracks", async (Track newTrack, MixVault db) =>
+// POST: Nummer uploaden en opslaan in de JUISTE map
+app.MapPost("/tracks", async (HttpRequest request, MixVault db) =>
 {
-    // We stellen automatisch de datum en tijd van uploaden in
-    newTrack.TrackUploadedAt = DateTime.Now;
+    if (!request.HasFormContentType || !request.Form.Files.Any())
+    {
+        return Results.BadRequest("Geen audiobestand ontvangen.");
+    }
+
+    var file = request.Form.Files[0];
+
+    var title = request.Form["title"].ToString();
+    var artist = request.Form["artist"].ToString();
+    var genre = request.Form["genre"].ToString();
+    var fkUser = int.Parse(request.Form["fkUser"].ToString());
+
+    var durationMsStr = request.Form["durationMs"].ToString();
+    double? durationMs = double.TryParse(durationMsStr, out var d) ? d : null;
+
+    if (string.IsNullOrEmpty(title)) return Results.BadRequest("Titel is verplicht.");
+
+    // --- BESTAND OPSLAAN IN DE CORRECTE SUBMAP ---
+    var fileExtension = Path.GetExtension(file.FileName);
+    var uniqueFileName = $"{Guid.NewGuid()}{fileExtension}"; // Alleen de GUID + Extensie houdt de URL schoon
+
+    // We slaan hem op in wwwroot/uploads/tracks zodat het stream-endpoint hem vindt!
+    var uploadFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "tracks");
+    if (!Directory.Exists(uploadFolder)) Directory.CreateDirectory(uploadFolder);
+
+    var filePath = Path.Combine(uploadFolder, uniqueFileName);
+    using (var stream = new FileStream(filePath, FileMode.Create))
+    {
+        await file.CopyToAsync(stream);
+    }
+
+    // --- DATABASE OPSLAAN ---
+    var newTrack = new Track
+    {
+        Title = title,
+        TrackArtist = artist,
+        TrackGenre = genre,
+        FkUser = fkUser,
+        DurationMs = durationMs,
+        TrackUploadedAt = DateTime.Now,
+        // We slaan hier direct de URL op die naar je werkende stream-endpoint verwijst!
+        TrackFileUrl = $"/tracks/stream/{uniqueFileName}"
+    };
 
     db.Tracks.Add(newTrack);
     await db.SaveChangesAsync();
 
-    // We sturen een bericht terug dat het succesvol is, samen met de nieuwe TrackID
     return Results.Created($"/tracks/{newTrack.TrackId}", newTrack);
 });
+// DELETE: Verwijder een track (Alleen via 'Mijn Uploads')
+app.MapDelete("/tracks/{id:int}", async (int id, MixVault db) =>
+{
+    var track = await db.Tracks.FindAsync(id);
+    if (track == null) return Results.NotFound("Track niet gevonden.");
 
+    // Verwijder het fysieke mp3-bestand van de server
+    if (!string.IsNullOrEmpty(track.TrackFileUrl))
+    {
+        var fullPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", track.TrackFileUrl.TrimStart('/'));
+        if (File.Exists(fullPath)) File.Delete(fullPath);
+    }
+
+    db.Tracks.Remove(track);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new { Message = "Track succesvol uit je kluis gewist." });
+});
 // POST: Een nieuwe afspeellijst maken
 app.MapPost("/playlists", async (Playlist newPlaylist, MixVault db) =>
 {
@@ -214,19 +276,23 @@ app.MapPost("/playlists/{playlistId}/tracks/{trackId}", async (int playlistId, i
     return Results.Ok(new { Bericht = "Nummer toegevoegd!", Positie = newEntry.Position });
 });
 
-// GET: Alle gelikete nummers van een specifieke gebruiker ophalen
+// GET: Alle gelikete nummers van een specifieke gebruiker ophalen met uploader naam
 app.MapGet("/users/{userId}/likes/tracks", async (int userId, MixVault db) =>
 {
     var likedTracks = await db.Userlikestracks
         .Where(u => u.FkUser == userId)
         .Include(u => u.FkTrackNavigation)
-        .Select(u => new // <--- Veranderd naar 'u' zodat het klopt met de rest
+        .ThenInclude(t => t.FkUserNavigation) // Laad de user van de track in
+        .Select(u => new
         {
             u.FkTrackNavigation.TrackId,
             u.FkTrackNavigation.Title,
+            TrackArtist = u.FkTrackNavigation.TrackArtist,
+            TrackGenre = u.FkTrackNavigation.TrackGenre,
             u.FkTrackNavigation.DurationMs,
             u.FkTrackNavigation.TrackUploadedAt,
-            TrackFileUrl = u.FkTrackNavigation.TrackFileUrl // <--- Nu sturen we de file URL ook mee!
+            TrackFileUrl = u.FkTrackNavigation.TrackFileUrl,
+            UploaderName = u.FkTrackNavigation.FkUserNavigation != null ? u.FkTrackNavigation.FkUserNavigation.DisplayName : "Onbekende DJ" // <-- HIER OOK!
         })
         .ToListAsync();
     return Results.Ok(likedTracks);
@@ -250,22 +316,7 @@ app.MapGet("/users/{userId}/likes/playlists", async (int userId, MixVault db) =>
     return Results.Ok(likedPlaylists);
 });
 
-//Post: maak een ACC aan
-app.MapPost("/users/register", async (string username, string password, MixVault db) =>
-{
-    var exists = await db.Users
-    .AnyAsync(pbl => pbl.DisplayName == username);
-    if (exists)
-        return Results.Conflict("Acount already in bucket list");
-    //zet in databank
-    var User = new User { DisplayName = username, Password = password };
 
-    db.Users.Add(User);
-    await db.SaveChangesAsync();
-
-
-    return Results.Created($"/users/register", User);
-});
 
 // GET: Alle informatie van een specifieke gebruiker ophalen via ID
 app.MapGet("/users/{id}", async (int id, MixVault db) =>
@@ -324,8 +375,8 @@ app.MapPost("/tracks/upload", async (IFormFile file) =>
 })
 .DisableAntiforgery(); // Dit is nodig in .NET 8 om via Minimal APIs bestanden (IFormFile) te kunnen ontvangen
 
-// GET: Stream het audiobestand rechtstreeks naar de browser (omzeilt OneDrive blokkades)
-app.MapGet("/tracks/stream/{fileName}", async (string fileName) =>
+// GET: Stream het audiobestand rechtstreeks naar de browser
+app.MapGet("/tracks/stream/{fileName}", async (string fileName, MixVault db) =>
 {
     var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "tracks");
     var filePath = Path.Combine(uploadPath, fileName);
@@ -335,12 +386,40 @@ app.MapGet("/tracks/stream/{fileName}", async (string fileName) =>
         return Results.NotFound("Bestand niet gevonden op de server.");
     }
 
-    // Bepaal het juiste content-type op basis van de extensie
     var contentType = fileName.EndsWith(".wav") ? "audio/wav" : "audio/mpeg";
 
-    // Open het bestand en stream het rechtstreeks naar de speler
+    // Open het bestand en stream het met range processing (nodig voor skippen/spoelen in audiobalken!)
     var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
     return Results.File(fileStream, contentType, enableRangeProcessing: true);
 });
 
+// POST: Maak een gloednieuw account aan via een JSON-body
+app.MapPost("/users/register", async (RegisterModel model, MixVault db) =>
+{
+// Check of de gebruikersnaam al bezet is
+var exists = await db.Users.AnyAsync(u => u.DisplayName == model.Username);
+if (exists)
+{
+return Results.Conflict("Deze gebruikersnaam is al in gebruik.");
+}
+
+// Maak de nieuwe gebruiker aan (We matchen jouw User model properties!)
+var newUser = new User
+{
+DisplayName = model.Username,
+Password = model.Password,
+UserCreatedAt = DateTime.Now // Optioneel, mocht je dit bijhouden
+};
+
+db.Users.Add(newUser);
+await db.SaveChangesAsync();
+
+return Results.Created($"/users/{newUser.UserId}", new { IdUser = newUser.UserId, NameUser = newUser.DisplayName });
+});
+
 app.Run();
+public class RegisterModel
+{
+    public string Username { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+}

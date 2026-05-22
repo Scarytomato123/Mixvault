@@ -64,7 +64,8 @@
             var client = HttpClientFactory.CreateClient("MixVaultAPI");
 
             // We sturen de data door naar je API register endpoint
-            var response = await client.PostAsJsonAsync("register", new { Username = username, Password = password });
+            var registerData = new { Username = username, Password = password};
+            var response = await client.PostAsJsonAsync("users/register", registerData);
 
             if (response.IsSuccessStatusCode)
             {
@@ -72,7 +73,7 @@
                 StateHasChanged();
 
                 // Wacht 2 seconden zodat de gebruiker het succesbericht ziet, stuur dan door naar login
-                await Task.Delay(2000);
+                await Task.Delay(200);
                 Navigation.NavigateTo("login");
             }
             else

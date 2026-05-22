@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 
 namespace Mixvault_API.Models;
+using System.ComponentModel.DataAnnotations.Schema;
 
 public partial class Track
 {
@@ -19,6 +20,8 @@ public partial class Track
 
     public string? TrackArtworkUrl { get; set; }
 
+    public string? TrackArtist { get; set; }
+
     public DateTime? TrackUploadedAt { get; set; }
 
     public int FkUser { get; set; }
@@ -27,5 +30,4 @@ public partial class Track
 
     public virtual ICollection<Playlisthastrack> Playlisthastracks { get; set; } = new List<Playlisthastrack>();
 
-    public virtual ICollection<Userlikestrack> Userlikestracks { get; set; } = new List<Userlikestrack>();
-}
+    public virtual ICollection<Userlikestrack> Userlikestracks { get; set; } = new List<Userlikestrack>();}
