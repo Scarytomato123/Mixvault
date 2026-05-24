@@ -2,14 +2,16 @@
 @implements IDisposable
 @inject MixVault_FrontEnd.Services.Userstate Userstate
 
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">MixVault_FrontEnd</a>
+@* 1. Het Logo bovenaan, gefixeerd op 50px *@
+<div class="top-row ps-3 navbar navbar-dark" style="height: 50px; padding: 0;">
+    <div class="container-fluid justify-content-center">
+        <a class="navbar-brand d-flex align-items-center justify-content-center" href="" style="margin: 0; padding: 0;">
+            <img src="/logo.png" alt="MixVault Logo" style="height: 50px; width: auto;" />
+        </a>
     </div>
 </div>
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
-
+@* 2. De rest van het menu in een aparte scrollbare sectie *@
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="flex-column">
         <div class="nav-item px-3">
@@ -20,21 +22,24 @@
 
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="/login">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> login
+                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Login
             </NavLink>
         </div>
 
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="/register">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> register
+                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Register
             </NavLink>
         </div>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="discover">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Discover
-            </NavLink>
-        </div>
+        @if (Userstate.IsLoggedIn)
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="discover">
+                    <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Discover
+                </NavLink>
+            </div>
+        }
 
         @if (Userstate.IsLoggedIn)
         {
@@ -43,30 +48,23 @@
                     <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Mijn MixVault
                 </NavLink>
             </div>
-        }
-
-        @if (Userstate.IsLoggedIn)
-        {
             <div class="nav-item px-3">
                 <NavLink class="nav-link" href="@($"Upload")">
                     <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Upload
                 </NavLink>
             </div>
         }
-
     </nav>
 </div>
 
 @code {
     protected override void OnInitialized()
     {
-        // Abonneer het menu op wijzigingen: hertekenen zodra iemand inlogt of uitlogt
         Userstate.OnChange += StateHasChanged;
     }
 
     public void Dispose()
     {
-        // Netjes opruimen als het menu verdwijnt
         Userstate.OnChange -= StateHasChanged;
     }
 }
