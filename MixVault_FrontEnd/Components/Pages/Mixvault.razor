@@ -67,6 +67,12 @@
             cursor: pointer;
         }
 
+        .horizontal-scroll-wrapper::after {
+            content: "";
+            flex: 0 0 170px; /* Takes up barely any width */
+            padding-right: 3rem; /* The breathing room you wanted */
+        }
+
     /* DE KAARTEN: Absolute breedte-restricties */
     .scroll-card {
         display: block !important;
