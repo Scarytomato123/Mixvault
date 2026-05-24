@@ -42,7 +42,7 @@
         padding-top: 10px;
         padding-bottom: 25px; /* Meer ademruimte */
         padding-left: 2rem !important; /* Geef de eerste kaart ruimte */
-        padding-right: 3rem !important; /* VOEG DIT TOE: Zorgt dat de laatste kaart niet wegvalt! */
+        padding-right: 3rem !important; /* Zorgt dat de laatste kaart niet wegvalt! */
 
         scrollbar-width: thin !important;
         scrollbar-color: var(--accent-pink) #1e1e24 !important;
@@ -67,6 +67,12 @@
             cursor: pointer;
         }
 
+        .horizontal-scroll-wrapper::after {
+            content: "";
+            flex: 0 0 1px; /* Aangepast naar 1px, werkt vaak beter in pure flexbox */
+            padding-right: 3rem;
+        }
+
     /* DE KAARTEN: Absolute breedte-restricties */
     .scroll-card {
         display: block !important;
@@ -85,6 +91,7 @@
         color: var(--text-white);
     }
 </style>
+
 <div class="container-fluid mt-4 px-4">
     <h1 class="mb-4 fw-bold text-white">Ontdek Nieuwe Muziek</h1>
 
@@ -97,7 +104,7 @@
         </div>
     </div>
 
-    @* --- TRACKS (Horizontale scroll en uniforme paarse kaarten) --- *@
+    @* --- TRACKS --- *@
     <h3 class="section-title">🌍 Wereldwijde Tracks</h3>
     @if (filteredTracks != null)
     {
@@ -126,7 +133,7 @@
         <p class="text-muted"><em>Tracks inladen...</em></p>
     }
 
-    @* --- PLAYLISTS (Horizontale scroll en uniforme paarse kaarten) --- *@
+    @* --- PLAYLISTS --- *@
     <h3 class="section-title">📂 Publieke Playlists</h3>
     @if (filteredPlaylists != null)
     {
@@ -164,48 +171,108 @@
                     <h5 class="modal-title fw-bold">Track Details</h5>
                     <button type="button" class="btn-close btn-close-white" @onclick="CloseDetails"></button>
                 </div>
+
                 <div class="modal-body text-center py-4">
                     <h2 class="fw-bold text-white mb-1">@selectedTrack.Title</h2>
                     <h4 class="mb-4" style="color: var(--accent-pink);">
                         👤 @(string.IsNullOrEmpty(selectedTrack.TrackArtist) ? selectedTrack.UploaderName : selectedTrack.TrackArtist)
                     </h4>
-                    <p class="text-muted small">Gemixt/Geüpload door: @selectedTrack.UploaderName</p>
 
-                    <div class="d-flex justify-content-center gap-2 mt-3">
-                        @* Let op de hoofdletter G in TrackGenre! *@
-                        <span class="badge bg-dark border border-secondary p-2">Genre: @selectedTrack.TrackGenre</span>
-                        <span class="badge bg-dark border border-secondary p-2">
-                            ⏳ @(selectedTrack.DurationMs.HasValue? Math.Round(selectedTrack.DurationMs.Value / 60000, 2).ToString("0.00") : "Onbekend") min
-                        </span>
-                    </div>
+                    @if (!showPlaylistSelector)
+                    {
+                        <p class="text-muted small">Gemixt/Geüpload door: @selectedTrack.UploaderName</p>
+
+                        <div class="d-flex justify-content-center gap-2 mt-3">
+                            <span class="badge bg-dark border border-secondary p-2">Genre: @selectedTrack.TrackGenre</span>
+                            <span class="badge bg-dark border border-secondary p-2">
+                                ⏳ @(selectedTrack.DurationMs.HasValue? Math.Round(selectedTrack.DurationMs.Value / 60000, 2).ToString("0.00") : "Onbekend") min
+                            </span>
+                        </div>
+                    }
+                    else
+                    {
+                        @* --- PLAYLIST SELECTOR WEERGAVE IN DE MODAL --- *@
+                        <div class="playlist-selector-view mt-3 text-start">
+                            <h5 class="mb-3 border-bottom pb-2" style="border-color: rgba(255,255,255,0.1) !important;">Kies een Playlist</h5>
+
+                            <div style="max-height: 150px; overflow-y: auto;" class="mb-3">
+                                @if (myPlaylists != null && myPlaylists.Any())
+                                {
+                                    @foreach (var p in myPlaylists)
+                                    {
+                                        <button class="btn btn-outline-secondary w-100 mb-2 text-start text-white" @onclick="() => AddTrackToExistingPlaylist(p.PlaylistId)">
+                                            📁 @p.PlaylistName
+                                        </button>
+                                    }
+                                }
+                                else
+                                {
+                                    <p class="text-muted small">Je hebt nog geen eigen playlists.</p>
+                                }
+                            </div>
+
+                            <h5 class="mb-2">Of maak een nieuwe:</h5>
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control bg-dark text-white border-secondary" placeholder="Naam nieuwe playlist..." @bind="newPlaylistName" />
+                                <button class="btn btn-mv-accent" @onclick="CreatePlaylistAndAddTrack">Maken</button>
+                            </div>
+                        </div>
+                    }
 
                     @if (!string.IsNullOrEmpty(actionMessage))
                     {
                         <div class="mt-3 small text-info fw-bold">✨ @actionMessage</div>
                     }
                 </div>
-                <div class="modal-footer border-0 d-flex flex-column gap-2">
-                    <button class="btn btn-mv-accent w-100 py-2 fw-bold" @onclick="() => PlayTrack(selectedTrack)">
-                        ▶ NU AFSPELEN
-                    </button>
 
-                    @* ALS JIJ DE UPLOADER BENT TOON VERWIJDERKNOP, ANDERS DE LIKE KNOP *@
-                    @if (selectedTrack.UploaderName == Userstate.DisplayName)
+                <div class="modal-footer border-0 d-flex flex-column gap-2">
+                    @if (!showPlaylistSelector)
                     {
-                        <button class="btn btn-danger w-100 py-2 fw-bold" @onclick="DeleteUploadedTrack">
-                            🗑️ VERWIJDEREN VAN SERVER
+                        <button class="btn btn-mv-accent w-100 py-2 fw-bold" @onclick="() => PlayTrack(selectedTrack)">
+                            ▶ NU AFSPELEN
+                        </button>
+
+                        @if (selectedTrack.UploaderName == Userstate.DisplayName)
+                        {
+                            <button class="btn btn-danger w-100 py-2 fw-bold" @onclick="DeleteUploadedTrack">
+                                🗑️ VERWIJDEREN VAN SERVER
+                            </button>
+                        }
+
+                        <div class="d-flex gap-2 w-100 mt-2">
+                            @* DYNAMISCHE LIKE / DISLIKE KNOP *@
+                            @if (userLikedTrackIds.Contains(selectedTrack.TrackId))
+                            {
+                                <button class="btn btn-outline-danger flex-grow-1" @onclick="() => UnlikeTrack(selectedTrack.TrackId)">
+                                    💔 Dislike
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-outline-light flex-grow-1" @onclick="() => LikeTrack(selectedTrack.TrackId)">
+                                    ❤️ Liken
+                                </button>
+                            }
+
+                            @* KNOP OM PLAYLIST SELECTOR TE OPENEN *@
+                            <button class="btn btn-outline-info flex-grow-1" @onclick="OpenPlaylistSelector">
+                                ➕ Playlist
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <button class="btn btn-link text-muted w-100 text-decoration-none" @onclick="() => { showPlaylistSelector = false; actionMessage = string.Empty; }">
+                            ⬅ Terug naar Track Info
                         </button>
                     }
-                    <button class="btn btn-outline-light w-100 mt-2" @onclick="async () => await LikeTrack(selectedTrack.TrackId)">
-                        ❤️ Liken
-                    </button>
                 </div>
             </div>
         </div>
     </div>
 }
 
-@* --- UNIVERSELE UNIFORME MODAL: PLAYLIST INFO --- *@
+@* --- UNIVERSELE UNIFORME MODAL: PLAYLIST INFO (Blijft hetzelfde) --- *@
 @if (selectedPlaylist != null)
 {
     <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.85);">
@@ -268,6 +335,12 @@
     private List<TrackModel>? filteredTracks;
     private List<Playlistmodel>? filteredPlaylists;
 
+    // Nieuw: Voor Like state & Playlist UI
+    private List<int> userLikedTrackIds = new();
+    private List<Playlistmodel>? myPlaylists;
+    private bool showPlaylistSelector = false;
+    private string newPlaylistName = "";
+
     // Filter & Zoek variabelen
     private string _searchText = "";
     private string SearchText
@@ -304,6 +377,7 @@
                     }
                 }
                 await LoadMusicData();
+                await LoadUserSpecificData(); // Haalt likes en eigen playlists op
             }
             catch (Exception)
             {
@@ -336,6 +410,30 @@
         }
     }
 
+    // NIEUW: Haal de actuele likes en playlists van de gebruiker op
+    private async Task LoadUserSpecificData()
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient("MixVaultAPI");
+
+            // 1. Haal de ID's op van tracks die deze user al geliket heeft
+            var likedTracks = await client.GetFromJsonAsync<List<TrackModel>>($"users/{Userstate.UserID}/likes/tracks");
+            if (likedTracks != null)
+            {
+                userLikedTrackIds = likedTracks.Select(t => t.TrackId).ToList();
+            }
+
+            // 2. Haal de eigen playlists op (ervan uitgaande dat je endpoint `/users/{id}/playlists` is)
+            myPlaylists = await client.GetFromJsonAsync<List<Playlistmodel>>($"users/{Userstate.UserID}/playlists");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Fout bij inladen user data: {ex.Message}");
+            myPlaylists = new();
+        }
+    }
+
     private void FilterData()
     {
         if (allTracks != null)
@@ -364,6 +462,7 @@
         selectedTrack = track;
         selectedPlaylist = null;
         actionMessage = "";
+        showPlaylistSelector = false; // Reset de UI view
         StateHasChanged();
     }
 
@@ -392,10 +491,10 @@
         selectedTrack = null;
         selectedPlaylist = null;
         actionMessage = "";
+        showPlaylistSelector = false;
         StateHasChanged();
     }
 
-    // Gekoppeld aan je nieuwe DELETE endpoint
     private async Task DeleteUploadedTrack()
     {
         if (selectedTrack == null) return;
@@ -407,7 +506,7 @@
             if (response.IsSuccessStatusCode)
             {
                 actionMessage = "🗑️ Permanent verwijderd van de server!";
-                await LoadMusicData(); // Herlaad de wereldwijde lijst direct
+                await LoadMusicData();
                 await Task.Delay(1000);
                 CloseDetails();
             }
@@ -419,23 +518,18 @@
         catch { actionMessage = "❌ Fout bij verbinden met API."; }
     }
 
-    // --- API ACTIES (Liken in Discover.razor) ---
+    // --- LIKE & DISLIKE LOGICA ---
     private async Task LikeTrack(int trackId)
     {
         try
         {
             var client = HttpClientFactory.CreateClient("MixVaultAPI");
-
-            // Matches exact met je backend URL: /users/{userId}/likes/tracks/{trackId}
             var response = await client.PostAsync($"users/{Userstate.UserID}/likes/tracks/{trackId}", null);
 
-            if (response.IsSuccessStatusCode)
+            if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.Conflict)
             {
                 actionMessage = "❤️ Track toegevoegd aan je favorieten!";
-            }
-            else if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
-            {
-                actionMessage = "📢 Je had deze track al geliket!";
+                if (!userLikedTrackIds.Contains(trackId)) userLikedTrackIds.Add(trackId);
             }
             else
             {
@@ -444,11 +538,35 @@
         }
         catch (Exception ex)
         {
-            actionMessage = "❌ Fout bij verbinden met server.";
-            Console.WriteLine($"Like error: {ex.Message}");
+            actionMessage = "❌ Fout bij server.";
         }
+        StateHasChanged();
+    }
 
-        StateHasChanged(); // Dwing de UI om de actionMessage direct te tonen!
+    // NIEUW: Dislike Track
+    private async Task UnlikeTrack(int trackId)
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient("MixVaultAPI");
+            // Check in je backend of dit de juiste URL is voor DELETE!
+            var response = await client.DeleteAsync($"users/{Userstate.UserID}/likes/tracks/{trackId}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                actionMessage = "💔 Verwijderd uit je likes.";
+                userLikedTrackIds.Remove(trackId);
+            }
+            else
+            {
+                actionMessage = "⚠️ Kon track niet disliken.";
+            }
+        }
+        catch
+        {
+            actionMessage = "❌ Fout bij server.";
+        }
+        StateHasChanged();
     }
 
     private async Task LikePlaylist(int playlistId)
@@ -456,33 +574,97 @@
         try
         {
             var client = HttpClientFactory.CreateClient("MixVaultAPI");
-
-            // Let op: we matchen hier de typo uit je backend ("playlist/{playlisId}")
-            // en sturen de playlistId mee naar de parameter die daar 'trackId' heet.
             var response = await client.PostAsync($"users/{Userstate.UserID}/likes/playlist/{playlistId}", null);
 
-            if (response.IsSuccessStatusCode)
-            {
-                actionMessage = "❤️ Playlist opgeslagen in je kluis!";
-            }
-            else if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
-            {
-                actionMessage = "📢 Je volgt deze playlist al!";
-            }
-            else
-            {
-                actionMessage = "⚠️ Kon playlist niet volgen.";
-            }
+            if (response.IsSuccessStatusCode) actionMessage = "❤️ Playlist opgeslagen!";
+            else if (response.StatusCode == System.Net.HttpStatusCode.Conflict) actionMessage = "📢 Je volgt deze playlist al!";
+            else actionMessage = "⚠️ Mislukt.";
         }
-        catch (Exception ex)
-        {
-            actionMessage = "❌ Fout bij verbinden met server.";
-            Console.WriteLine($"Playlist like error: {ex.Message}");
-        }
-
+        catch { actionMessage = "❌ Fout."; }
         StateHasChanged();
     }
 
+    // --- PLAYLIST SELECTOR LOGICA ---
+    private void OpenPlaylistSelector()
+    {
+        showPlaylistSelector = true;
+        actionMessage = "";
+    }
+
+    private async Task AddTrackToExistingPlaylist(int playlistId)
+    {
+        if (selectedTrack == null) return;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("MixVaultAPI");
+            // Aanname van je endpoint: POST /playlists/{playlistId}/tracks/{trackId}
+            var response = await client.PostAsync($"playlists/{playlistId}/tracks/{selectedTrack.TrackId}", null);
+
+            if (response.IsSuccessStatusCode)
+            {
+                actionMessage = "✅ Succesvol toegevoegd aan de playlist!";
+                StateHasChanged();
+                await Task.Delay(1500); // Wacht even zodat gebruiker succes ziet
+                showPlaylistSelector = false; // Keer terug naar hoofdmenu van de modal
+            }
+            else
+            {
+                actionMessage = "⚠️ Kon track niet toevoegen.";
+            }
+        }
+        catch { actionMessage = "❌ Fout bij verbinden."; }
+        StateHasChanged();
+    }
+
+    private async Task CreatePlaylistAndAddTrack()
+    {
+        if (string.IsNullOrWhiteSpace(newPlaylistName) || selectedTrack == null)
+        {
+            actionMessage = "Vul een naam in voor de playlist!";
+            return;
+        }
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("MixVaultAPI");
+
+            // 1. Maak de playlist aan
+            var newPlaylist = new Playlistmodel
+            {
+                PlaylistName = newPlaylistName,
+                PlaylistDescription = "Nieuwe playlist",
+                PlaylistGenre = selectedTrack.TrackGenre
+            };
+
+            var createResponse = await client.PostAsJsonAsync($"users/{Userstate.UserID}/playlists", newPlaylist);
+
+            if (createResponse.IsSuccessStatusCode)
+            {
+                // Haal de net aangemaakte playlist op om de ID te weten
+                var createdPlaylist = await createResponse.Content.ReadFromJsonAsync<Playlistmodel>();
+
+                if (createdPlaylist != null)
+                {
+                    // 2. Voeg de track direct toe
+                    await AddTrackToExistingPlaylist(createdPlaylist.PlaylistId);
+
+                    // Herlaad de eigen playlists zodat de nieuwe in de lijst staat
+                    await LoadUserSpecificData();
+                    newPlaylistName = "";
+                }
+            }
+            else
+            {
+                actionMessage = "⚠️ Kon playlist niet aanmaken.";
+            }
+        }
+        catch { actionMessage = "❌ Fout bij verbinden."; }
+        StateHasChanged();
+    }
+
+
+
+    // --- AUDIO PLAYERS ---
     private void PlayTrack(TrackModel track)
     {
         if (track != null && !string.IsNullOrEmpty(track.TrackFileUrl))
@@ -504,17 +686,8 @@
         }
     }
 
-    // --- DTO Classes (Nu met de felbegeerde TrackArtist!) ---
-    public class TrackModel
-    {
-        public int TrackId { get; set; }
-        public string? Title { get; set; }
-        public string? TrackArtist { get; set; } // Zorg dat deze exact zo heet
-        public double? DurationMs { get; set; }
-        public string? TrackGenre { get; set; }  // Zorg dat deze exact zo heet
-        public string? UploaderName { get; set; }
-        public string? TrackFileUrl { get; set; } // Dit moet exact matchen met de API!
-    }
+    // --- DTO Classes ---
+    public class TrackModel { public int TrackId { get; set; } public string? Title { get; set; } public string? TrackArtist { get; set; } public double? DurationMs { get; set; } public string? TrackGenre { get; set; } public string? UploaderName { get; set; } public string? TrackFileUrl { get; set; } }
     public class PlaylistTrackModel { public int? Position { get; set; } public int TrackId { get; set; } public string? Title { get; set; } public double? Duration { get; set; } public string? TrackFileUrl { get; set; } }
     public class Playlistmodel { public int PlaylistId { get; set; } public string? PlaylistName { get; set; } public string? PlaylistDescription { get; set; } public string? PlaylistGenre { get; set; } public string? PlaylistTags { get; set; } public List<PlaylistTrackModel> Tracks { get; set; } = new(); }
 }

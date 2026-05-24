@@ -253,27 +253,18 @@ app.MapPost("/playlists", async (Playlist newPlaylist, MixVault db) =>
     return Results.Created($"/playlists/{newPlaylist.PlaylistId}", newPlaylist);
 });
 
-// POST: Een nummer toevoegen aan een specifieke afspeellijst
-app.MapPost("/playlists/{playlistId}/tracks/{trackId}", async (int playlistId, int trackId, MixVault db) =>
+// POST: Maak een nieuwe playlist aan voor een specifieke user
+app.MapPost("/users/{userId}/playlists", async (int userId, Playlist newPlaylist, MixVault db) =>
 {
-    // Trucje: we zoeken eerst op wat de hoogste 'Position' in de huidige afspeellijst is.
-    // Als de lijst nog leeg is, beginnen we op positie 0.
-    var currentMaxPosition = await db.Playlisthastracks
-        .Where(p => p.FkPlaylist == playlistId)
-        .MaxAsync(p => (int?)p.Position) ?? 0;
+    // Koppel de playlist aan de maker (let op: check even of jouw property FkUser of UserId heet in je Playlist model!)
+    newPlaylist.FkUser = userId;
 
-    // Maak de koppeling aan en zet het nieuwe nummer achteraan (positie + 1)
-    var newEntry = new Playlisthastrack
-    {
-        FkPlaylist = playlistId,
-        FkTrack = trackId,
-        Position = currentMaxPosition + 1
-    };
-
-    db.Playlisthastracks.Add(newEntry);
+    db.Playlists.Add(newPlaylist);
     await db.SaveChangesAsync();
 
-    return Results.Ok(new { Bericht = "Nummer toegevoegd!", Positie = newEntry.Position });
+    // We sturen het hele object terug (inclusief de nieuw gegenereerde PlaylistId) 
+    // zodat Blazor weet in welke ID de track direct daarna gestoken moet worden!
+    return Results.Ok(newPlaylist);
 });
 
 // GET: Alle gelikete nummers van een specifieke gebruiker ophalen met uploader naam
@@ -314,6 +305,23 @@ app.MapGet("/users/{userId}/likes/playlists", async (int userId, MixVault db) =>
         })
         .ToListAsync();
     return Results.Ok(likedPlaylists);
+});
+
+// GET: Haal alle eigen playlists van een user op
+app.MapGet("/users/{userId}/playlists", async (int userId, MixVault db) =>
+{
+    var myPlaylists = await db.Playlists
+        // LET OP: Controleer of dit FkUser heet in jouw C# model, of misschien UserId!
+        .Where(p => p.FkUser == userId)
+        .Select(p => new {
+            PlaylistId = p.PlaylistId,
+            PlaylistName = p.PlaylistName,
+            PlaylistDescription = p.PlaylistDescription,
+            PlaylistGenre = p.PlaylistGenre
+        })
+        .ToListAsync();
+
+    return Results.Ok(myPlaylists);
 });
 
 
@@ -415,6 +423,29 @@ db.Users.Add(newUser);
 await db.SaveChangesAsync();
 
 return Results.Created($"/users/{newUser.UserId}", new { IdUser = newUser.UserId, NameUser = newUser.DisplayName });
+});
+
+// POST: Een nummer toevoegen aan een specifieke afspeellijst
+app.MapPost("/playlists/{playlistId}/tracks/{trackId}", async (int playlistId, int trackId, MixVault db) =>
+{
+    // Trucje: we zoeken eerst op wat de hoogste 'Position' in de huidige afspeellijst is.
+    // Als de lijst nog leeg is, beginnen we op positie 0.
+    var currentMaxPosition = await db.Playlisthastracks
+        .Where(p => p.FkPlaylist == playlistId)
+        .MaxAsync(p => (int?)p.Position) ?? 0;
+
+    // Maak de koppeling aan en zet het nieuwe nummer achteraan (positie + 1)
+    var newEntry = new Playlisthastrack
+    {
+        FkPlaylist = playlistId,
+        FkTrack = trackId,
+        Position = currentMaxPosition + 1
+    };
+
+    db.Playlisthastracks.Add(newEntry);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new { Bericht = "Nummer toegevoegd!", Positie = newEntry.Position });
 });
 
 app.Run();
